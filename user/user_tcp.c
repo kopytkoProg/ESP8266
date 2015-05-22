@@ -3,10 +3,41 @@
 #include "driver/uart.h"
 #include "espconn.h"
 #include "mem.h"
-
+#include "user_tcp.h"
+#include "user_config.h"
+#include "osapi.h"
 
 //----------------------------------------------------------------------------------
 static struct espconn *pTcpServer;
+// uint8_t next_conn_id = 0;
+at_linkConType slot[MAX_CONNNECTION];
+
+//----------------------------------------------------------------------------------
+void ICACHE_FLASH_ATTR
+init_slots() {
+
+	uint8_t i = 0;
+	for (i = 0; i < MAX_CONNNECTION; i++) {
+		slot[i].free = TRUE;
+		slot[i].linkId = i;
+	}
+}
+
+int8_t ICACHE_FLASH_ATTR
+get_first_free_slot() {
+
+	int8_t i = 0;
+	int8_t r = -1;
+
+	for (i = 0; r == -1 && i < MAX_CONNNECTION; i++) {
+		if (slot[i].free)
+			r = i;
+	}
+	return r;
+}
+
+//----------------------------------------------------------------------------------
+
 /**
  * @brief  Client received callback function.
  * @param  arg: contain the ip link information
@@ -16,10 +47,15 @@ static struct espconn *pTcpServer;
  */
 void ICACHE_FLASH_ATTR
 at_tcpclient_recv(void *arg, char *pdata, unsigned short len) {
-	uart0_sendStr("at_tcpclient_recv: ");
 	struct espconn *pespconn = (struct espconn *) arg;
+	at_linkConType *s = (at_linkConType *) pespconn->reverse;
+
+	uint8_t buffer[20];
+
+	os_sprintf(buffer, "<%d,%d>:", s->linkId, len);
+	uart0_sendStr(buffer);
+
 	uart0_tx_buffer(pdata, len);
-	espconn_sent(pespconn, pdata, len);
 
 }
 /**
@@ -29,8 +65,11 @@ at_tcpclient_recv(void *arg, char *pdata, unsigned short len) {
  */
 static void ICACHE_FLASH_ATTR
 at_tcpserver_recon_cb(void *arg, sint8 errType) {
-	uart0_sendStr("at_tcpserver_recon_cb \n\r");
+	struct espconn *pespconn = (struct espconn *) arg;
+	at_linkConType *s = (at_linkConType *) pespconn->reverse;
+	s->free = TRUE;
 
+	uart0_sendStr("at_tcpserver_recon_cb \n\r");
 }
 
 /**
@@ -40,6 +79,10 @@ at_tcpserver_recon_cb(void *arg, sint8 errType) {
  */
 static void ICACHE_FLASH_ATTR
 at_tcpserver_discon_cb(void *arg) {
+	struct espconn *pespconn = (struct espconn *) arg;
+	at_linkConType *s = (at_linkConType *) pespconn->reverse;
+	s->free = TRUE;
+
 	uart0_sendStr("at_tcpserver_discon_cb \n\r");
 }
 
@@ -57,6 +100,15 @@ at_tcpclient_sent_cb(void *arg) {
 LOCAL void ICACHE_FLASH_ATTR
 at_tcpserver_listen(void *arg) {
 	struct espconn *pespconn = (struct espconn *) arg;
+
+	int8_t first_free_slot = get_first_free_slot();
+	if (first_free_slot == -1)
+		return;
+
+	slot[first_free_slot].free = FALSE;
+	slot[first_free_slot].pCon = pespconn;
+	pespconn->reverse = &slot[first_free_slot];
+
 	uart0_sendStr("at_tcpserver_listen \n\r");
 	espconn_regist_recvcb(pespconn, at_tcpclient_recv);
 	espconn_regist_reconcb(pespconn, at_tcpserver_recon_cb);
@@ -67,6 +119,9 @@ at_tcpserver_listen(void *arg) {
 
 void ICACHE_FLASH_ATTR
 createServer() {
+
+	init_slots();
+
 	pTcpServer = (struct espconn *) os_zalloc(sizeof(struct espconn));
 	if (pTcpServer == NULL) {
 		uart0_sendStr("TcpServer Failure\r\n");

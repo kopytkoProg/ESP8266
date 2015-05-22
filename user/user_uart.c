@@ -8,6 +8,8 @@
 #include "user_uart.h"
 #include "stdlib.h"
 #include "osapi.h"
+#include "user_config.h"
+#include "user_utils.h"
 
 os_event_t user_recvTaskQueue[user_recvTaskQueueLen];
 
@@ -30,26 +32,50 @@ on_char_come(uint8_t c) {
 
 	switch (state) {
 	case waiting_for_cmd:
-		//--------------------------------------------------------
-		if ((p || c == '>') && p < BUFFER_SIZE) {
+
+		/****************************************************************
+		 * Command to send data to the remote client
+		 * receive <id, size> thru uart
+		 * id - of connection
+		 * size - of data to receive by uart and send to client
+		 ****************************************************************/
+
+		if ((p || c == '<') && p < BUFFER_SIZE) {
 			buffer[p++] = c;
 		}
 
-		if (p && buffer[p - 1] == '<') {
+		if (p && buffer[p - 1] == '>') {
 
 			id = atoi((char *) (buffer + 1));
-			size = atoi((char *) (buffer + 1 + 3 + 1));
 
-			os_sprintf(buffer, "id: %d, size: %d", id, size);
-			uart0_sendStr(buffer);
+			size = atoi((char *) (buffer + 1 + find_first(buffer, p, ',')));
+
+			if (ECHO) {
+				os_sprintf(buffer, "\r\n<id: %d, size: %d, coma: %d>", id, size, find_first(buffer, p, ','));
+				uart0_sendStr(buffer);
+			}
+
+			if (id >= 0 && id < MAX_CONNNECTION && size > 0 && size < BUFFER_SIZE)
+				state = receiving_data;
+			else
+				uart0_sendStr("\r\nERROR: invalid id or size \r\n");
+
 			p = 0;
-			state = receiving_data;
 		}
 
 		break;
 	case receiving_data:
 		//--------------------------------------------------------
-		uart0_sendStr("TIME FOR DATA! ;)");
+		// uart0_sendStr("TIME FOR DATA! ;)");
+		buffer[p++] = c;
+
+		if (p >= size) {
+			// done SEND data !
+			if (ECHO) uart0_tx_buffer(buffer, size);
+			state = waiting_for_cmd;
+		}
+
+		p = 0;
 		break;
 	default:
 		//--------------------------------------------------------
