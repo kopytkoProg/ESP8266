@@ -58,7 +58,7 @@ on_char_come(uint8_t c) {
 			if (id >= 0 && id < MAX_CONNNECTION && size > 0 && size < BUFFER_SIZE)
 				state = receiving_data;
 			else
-				uart0_sendStr("\r\nERROR: invalid id or size \r\n");
+				uart0_sendStr("\r\nERROR: invalid id or size! \r\n");
 
 			p = 0;
 		}
@@ -71,11 +71,27 @@ on_char_come(uint8_t c) {
 
 		if (p >= size) {
 			// done SEND data !
-			if (ECHO) uart0_tx_buffer(buffer, size);
+
+			uart_data_to_exec_t *dte = (uart_data_to_exec_t *) os_zalloc(sizeof(uart_data_to_exec_t));
+			uint8_t *d = (uint8_t *) os_zalloc(size);
+
+			dte->data = d;
+			dte->len = size;
+			dte->id = id;
+
+			uint8_t i = 0;
+			for (i = 0; i < size; i++)
+				*(d + i) = buffer[i];
+
+//			if (ECHO)
+//				uart0_tx_buffer(buffer, size);
 			state = waiting_for_cmd;
+			p = 0;
+
+
+			system_os_post(user_uart_procTaskPrio, 0,(uint32_t) dte);
 		}
 
-		p = 0;
 		break;
 	default:
 		//--------------------------------------------------------

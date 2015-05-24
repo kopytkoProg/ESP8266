@@ -29,7 +29,11 @@
 #define at_recvTaskQueueLen    64
 
 #define at_procTaskPrio        1
-#define at_procTaskQueueLen    1
+#define at_procTaskQueueLen    64
+
+
+#define user_uart_procTaskPrio     		2
+#define user_uart_procTaskQueueLen    	64
 
 
 #define user_procTaskPrio        at_procTaskPrio
