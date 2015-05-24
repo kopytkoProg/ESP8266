@@ -8,6 +8,18 @@
 #include "osapi.h"
 #include "at.h"
 
+
+
+/************************************************************************
+ * Known issues:
+ * - when someone connect as a first client then he get id = 0 and when he send something
+ *   and disconnect and new client connect (and no other client) then he get id = 0
+ *   so the uart client don have enough time to response to the first client, he respond
+ *   to the second client
+ *   Solution: use more complex linkId as id.
+ ************************************************************************/
+
+
 //----------------------------------------------------------------------------------
 static struct espconn *pTcpServer;
 // uint8_t next_conn_id = 0;
