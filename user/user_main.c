@@ -31,6 +31,12 @@ tcp_exec(os_event_t *events) {
 	at_linkConType *l = (at_linkConType *) dte->link;
 	struct espconn *e = (struct espconn *) l->pCon;
 
+	//--------
+	uint8_t buffer[30];
+	os_sprintf(buffer, "<%d, %d>:", l->linkId, dte->len);
+	uart0_sendStr(buffer);
+	//--------
+
 	uart0_tx_buffer(dte->data, dte->len);
 
 	if (!l->free)

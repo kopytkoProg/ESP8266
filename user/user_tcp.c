@@ -8,17 +8,14 @@
 #include "osapi.h"
 #include "at.h"
 
-
-
 /************************************************************************
  * Known issues:
  * - when someone connect as a first client then he get id = 0 and when he send something
  *   and disconnect and new client connect (and no other client) then he get id = 0
  *   so the uart client don have enough time to response to the first client, he respond
  *   to the second client
- *   Solution: use more complex linkId as id.
+ *   Solution: next slot id: (i + next_slot) % MAX_CONNNECTION.
  ************************************************************************/
-
 
 //----------------------------------------------------------------------------------
 static struct espconn *pTcpServer;
@@ -61,6 +58,7 @@ init_slots() {
 	}
 }
 
+uint8_t next_slot = 0;
 int8_t ICACHE_FLASH_ATTR
 get_first_free_slot() {
 
@@ -68,9 +66,11 @@ get_first_free_slot() {
 	int8_t r = -1;
 
 	for (i = 0; r == -1 && i < MAX_CONNNECTION; i++) {
-		if (slot[i].free)
-			r = i;
+		if (slot[(i + next_slot) % MAX_CONNNECTION].free)
+			r = (i + next_slot) % MAX_CONNNECTION;
 	}
+
+	next_slot = r + 1;
 	return r;
 }
 
