@@ -21,7 +21,7 @@
 #include "osapi.h"
 #include "driver/uart_register.h"
 //#include "ssc.h"
-#include "at.h"
+#include "user_config.h"
 
 // UartDev is defined and initialized in rom code.
 extern UartDevice UartDev;
@@ -177,13 +177,13 @@ LOCAL void uart0_rx_intr_handler(void *para) {
 
 		ETS_UART_INTR_DISABLE();
 
-		system_os_post(at_recvTaskPrio, 0, 0);
+		system_os_post(user_recvTaskPrio, 0, 0);
 
 	} else if (UART_RXFIFO_TOUT_INT_ST
 			== (READ_PERI_REG(UART_INT_ST(uart_no)) & UART_RXFIFO_TOUT_INT_ST)) {
 		ETS_UART_INTR_DISABLE();
 
-		system_os_post(at_recvTaskPrio, 0, 0);
+		system_os_post(user_recvTaskPrio, 0, 0);
 
 	}
 

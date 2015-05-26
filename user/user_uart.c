@@ -4,7 +4,6 @@
 #include "espconn.h"
 #include "mem.h"
 #include "driver/uart.h"
-#include "at.h"
 #include "user_uart.h"
 #include "stdlib.h"
 #include "osapi.h"
@@ -89,7 +88,7 @@ on_char_come(uint8_t c) {
 			p = 0;
 
 
-			system_os_post(user_uart_procTaskPrio, 0,(uint32_t) dte);
+			system_os_post(uart_execTaskPrio, 0,(uint32_t) dte);
 		}
 
 		break;

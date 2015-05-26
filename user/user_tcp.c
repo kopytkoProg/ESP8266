@@ -6,7 +6,7 @@
 #include "user_tcp.h"
 #include "user_config.h"
 #include "osapi.h"
-#include "at.h"
+
 
 /************************************************************************
  * Known issues:
@@ -153,7 +153,7 @@ at_tcpclient_recv(void *arg, char *pdata, unsigned short len) {
 		// now the executing process have to remove this data
 		s->len = 0;
 
-		system_os_post(user_procTaskPrio, 0, (uint32_t) dte);
+		system_os_post(tcp_execTaskPrio, 0, (uint32_t) dte);
 
 	}
 }

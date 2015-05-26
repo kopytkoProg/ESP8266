@@ -7,3 +7,12 @@
 
 #define MAX_CONNNECTION 	10
 
+
+#define user_recvTaskPrio        		0
+#define user_recvTaskQueueLen     		64
+
+#define tcp_execTaskPrio        		1
+#define tcp_execTaskQueueLen    		64
+
+#define uart_execTaskPrio     			2
+#define uart_execTaskQueueLen    		64
