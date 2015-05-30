@@ -6,13 +6,13 @@
 #include "driver/uart.h"
 #include "espconn.h"
 #include "mem.h"
-
 #include "user_wifi.h"
 #include "user_tcp.h"
 #include "user_uart.h"
 
 os_event_t tcp_execTaskQueue[tcp_execTaskQueueLen];
 os_event_t uart_execTaskQueue[uart_execTaskQueueLen];
+// os_event_t tcp_dcTaskQueue[tcp_dcTaskQueueLen];
 
 static void tcp_exec(os_event_t *events);
 void createServer();
@@ -50,12 +50,27 @@ add_task_to_queue(tcp_data_to_exec_t *dte) {
 }
 
 static void ICACHE_FLASH_ATTR
+remove_tcp_data_to_exec(tcp_data_to_exec_t *dte) {
+	if (dte->data != NULL && dte->len > 0)
+		os_free(dte->data);
+	os_free(dte);
+}
+
+static void ICACHE_FLASH_ATTR
 exec_data() {
 
 	if (main_state == Idle && dte_queue_count > 0) {
+		tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) dte_queue[first_in_queue()];
+
+		// if dte is closing info then let it do
+		if (dte->link->free && dte->len > 0) { 				// closed
+		// remove because no one get response
+			remove_tcp_data_to_exec(dte);
+			dte_queue_count--;
+			return exec_data();
+		}
 		main_state = WaitingForResponse;
 
-		tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) dte_queue[first_in_queue()];
 		at_linkConType *l = (at_linkConType *) dte->link;
 		struct espconn *e = (struct espconn *) l->pCon;
 
@@ -65,7 +80,8 @@ exec_data() {
 		uart0_sendStr(buffer);
 		//--------
 
-		uart0_tx_buffer(dte->data, dte->len);
+		if (dte->len > 0)
+			uart0_tx_buffer(dte->data, dte->len);
 
 	}
 }
@@ -79,21 +95,37 @@ response(uint8_t *b, uint16_t size) {
 		at_linkConType *l = (at_linkConType *) dte->link;
 		struct espconn *e = (struct espconn *) l->pCon;
 
-		if (l->free) {
+		if (l->free && dte->len > 0) {
 			uart0_sendStr("\r\nERROR: connection closed! \r\n");
+		} else if (l->free) {	// when is response for closing info
+			// DO NOTHING WITH CONFIRMATION ABOUT TCP CLOSED CONNECTION
 		} else {
 			espconn_sent(e, b, size);
 		}
 
-		os_free(dte->data);
-		os_free(dte);
+		remove_tcp_data_to_exec(dte);
 		dte_queue_count--;
 	} else {
 		uart0_sendStr("\r\nERROR: no task in queue! \r\n");
 	}
 	main_state = Idle;
 }
+/****************************************************************
 
+ ****************************************************************/
+//static void ICACHE_FLASH_ATTR
+//tcp_dc(os_event_t *events) {
+//	at_linkConType *l = (at_linkConType *) events->par;
+//
+//
+//	uart0_sendStr("\r\nCLOSED ! \r\n");
+//	if (add_task_to_queue(dte) == -1) {
+//		uart0_sendStr("\r\nERROR: queue is full ! \r\n");
+//	}
+//
+//	exec_data();
+//
+//}
 /****************************************************************
  * Remember to remove:
  * 		dte->data
@@ -107,10 +139,30 @@ tcp_exec(os_event_t *events) {
 	at_linkConType *l = (at_linkConType *) dte->link;
 	struct espconn *e = (struct espconn *) l->pCon;
 
-	if (add_task_to_queue(dte) == -1)
-		espconn_sent(e, ERJECTED, sizeof(ERJECTED));
+	switch (events->sig) {
+	case my_tcp_msg_comme: {
 
-	exec_data();
+//		uint8_t c[] = "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss";
+//		espconn_sent(e, c, sizeof(c));
+//		c[100] = 'X';
+
+		if (add_task_to_queue(dte) == -1)
+			espconn_sent(e, ERJECTED, sizeof(ERJECTED));
+
+		exec_data();
+	}
+		break;
+	case my_tcp_disconnect:
+
+		if (add_task_to_queue(dte) == -1)
+			uart0_sendStr("\r\nERROR: queue is full ! \r\n");
+
+		exec_data();
+
+		break;
+	default:
+		break;
+	}
 
 }
 
@@ -124,15 +176,31 @@ static void ICACHE_FLASH_ATTR
 uart_exec(os_event_t *events) {
 	uart_data_to_exec_t *dte = (uart_data_to_exec_t *) events->par;
 
-	uart0_tx_buffer(dte->data, dte->len);
+	switch (events->sig) {
+	case my_headered_msg:
 
-	// Id from uart data is not used
+		espconn_sent(get_link_by_linkId(dte->id)->pCon, dte->data, dte->len);
 
-	response(dte->data, dte->len);
+		os_free(dte->data);
+		os_free(dte);
 
-	exec_data();
-	os_free(dte->data);
-	os_free(dte);
+		break;
+	case my_unheadered_msg:
+
+		uart0_tx_buffer(dte->data, dte->len);
+
+		// Id from uart data is not used (0)
+		response(dte->data, dte->len);
+
+		os_free(dte->data);
+		os_free(dte);
+
+		exec_data();
+
+		break;
+	default:
+		break;
+	}
 }
 
 //Init function 
@@ -156,5 +224,6 @@ user_init() {
 
 	system_os_task(tcp_exec, tcp_execTaskPrio, tcp_execTaskQueue, tcp_execTaskQueueLen);
 	system_os_task(uart_exec, uart_execTaskPrio, uart_execTaskQueue, uart_execTaskQueueLen);
+	//system_os_task(tcp_dc, tcp_dcTaskPrio, tcp_dcTaskQueue, tcp_dcTaskQueueLen);
 
 }

@@ -21,7 +21,7 @@ uint8_t id = 0;
 uint8_t size = 0;
 
 enum enum_state {
-	waiting_for_cmd, receiving_data
+	waiting_for_cmd, receiving_data, reciving_unknown_length_data, reciving_header
 };
 
 enum enum_state state = waiting_for_cmd;
@@ -32,6 +32,12 @@ on_char_come(uint8_t c) {
 	switch (state) {
 	case waiting_for_cmd:
 
+		if ((p || c == '{') && p < BUFFER_SIZE) {
+			buffer[p++] = c;
+			state = reciving_unknown_length_data;
+			return;
+		}
+
 		/****************************************************************
 		 * Command to send data to the remote client
 		 * receive <id, size> thru uart
@@ -41,7 +47,15 @@ on_char_come(uint8_t c) {
 
 		if ((p || c == '<') && p < BUFFER_SIZE) {
 			buffer[p++] = c;
+			state = reciving_header;
+			return;
 		}
+
+		break;
+
+	case reciving_header:
+		//--------------------------------------------------------
+		buffer[p++] = c;
 
 		if (p && buffer[p - 1] == '>') {
 
@@ -63,9 +77,32 @@ on_char_come(uint8_t c) {
 		}
 
 		break;
+	case reciving_unknown_length_data:
+		//--------------------------------------------------------
+		buffer[p++] = c;
+
+		if (c == '}') {
+			uart_data_to_exec_t *dte = (uart_data_to_exec_t *) os_zalloc(sizeof(uart_data_to_exec_t));
+			uint8_t *d = (uint8_t *) os_zalloc(p);
+
+			dte->data = d;
+			dte->len = p;
+			// unknown destination
+			dte->id = 0;
+
+			uint8_t i = 0;
+			for (i = 0; i < p; i++)
+				*(d + i) = buffer[i];
+
+			state = waiting_for_cmd;
+			p = 0;
+
+			system_os_post(uart_execTaskPrio, my_unheadered_msg, (uint32_t) dte);
+		}
+
+		break;
 	case receiving_data:
 		//--------------------------------------------------------
-		// uart0_sendStr("TIME FOR DATA! ;)");
 		buffer[p++] = c;
 
 		if (p >= size) {
@@ -82,13 +119,10 @@ on_char_come(uint8_t c) {
 			for (i = 0; i < size; i++)
 				*(d + i) = buffer[i];
 
-//			if (ECHO)
-//				uart0_tx_buffer(buffer, size);
 			state = waiting_for_cmd;
 			p = 0;
 
-
-			system_os_post(uart_execTaskPrio, 0,(uint32_t) dte);
+			system_os_post(uart_execTaskPrio, my_headered_msg, (uint32_t) dte);
 		}
 
 		break;

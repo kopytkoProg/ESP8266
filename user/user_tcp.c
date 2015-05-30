@@ -7,7 +7,6 @@
 #include "user_config.h"
 #include "osapi.h"
 
-
 /************************************************************************
  * Known issues:
  * - when someone connect as a first client then he get id = 0 and when he send something
@@ -153,10 +152,27 @@ at_tcpclient_recv(void *arg, char *pdata, unsigned short len) {
 		// now the executing process have to remove this data
 		s->len = 0;
 
-		system_os_post(tcp_execTaskPrio, 0, (uint32_t) dte);
+		system_os_post(tcp_execTaskPrio, my_tcp_msg_comme, (uint32_t) dte);
 
 	}
 }
+
+static void ICACHE_FLASH_ATTR
+disconnect(void *arg) {
+	struct espconn *pespconn = (struct espconn *) arg;
+	at_linkConType *s = (at_linkConType *) pespconn->reverse;
+	s->free = TRUE;
+	if (s->len > 0)
+		os_free(s->data);
+
+	tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) os_zalloc(sizeof(tcp_data_to_exec_t));
+	dte->len = 0;
+	dte->data = NULL;
+	dte->link = s;
+
+	system_os_post(tcp_execTaskPrio, my_tcp_disconnect, (uint32_t) dte);
+}
+
 /**
  * @brief  Tcp server connect repeat callback function.
  * @param  arg: contain the ip link information
@@ -164,12 +180,8 @@ at_tcpclient_recv(void *arg, char *pdata, unsigned short len) {
  */
 static void ICACHE_FLASH_ATTR
 at_tcpserver_recon_cb(void *arg, sint8 errType) {
-	struct espconn *pespconn = (struct espconn *) arg;
-	at_linkConType *s = (at_linkConType *) pespconn->reverse;
-	s->free = TRUE;
-	if (s->len > 0)
-		os_free(s->data);
-	uart0_sendStr("at_tcpserver_recon_cb \n\r");
+	//uart0_sendStr("at_tcpserver_recon_cb \n\r");
+	disconnect(arg);
 }
 
 /**
@@ -179,12 +191,9 @@ at_tcpserver_recon_cb(void *arg, sint8 errType) {
  */
 static void ICACHE_FLASH_ATTR
 at_tcpserver_discon_cb(void *arg) {
-	struct espconn *pespconn = (struct espconn *) arg;
-	at_linkConType *s = (at_linkConType *) pespconn->reverse;
-	s->free = TRUE;
-	if (s->len > 0)
-		os_free(s->data);
-	uart0_sendStr("at_tcpserver_discon_cb \n\r");
+	//uart0_sendStr("at_tcpserver_discon_cb \n\r");
+	disconnect(arg);
+
 }
 
 /**
