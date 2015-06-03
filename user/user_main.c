@@ -137,6 +137,8 @@ response(uint8_t *b, uint16_t size) {
 static void ICACHE_FLASH_ATTR
 tcp_exec(os_event_t *events) {
 
+	os_intr_lock();
+
 	tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) events->par;
 	at_linkConType *l = (at_linkConType *) dte->link;
 	struct espconn *e = (struct espconn *) l->pCon;
@@ -166,6 +168,7 @@ tcp_exec(os_event_t *events) {
 		break;
 	}
 
+	os_intr_unlock();
 }
 
 /****************************************************************
@@ -176,6 +179,9 @@ tcp_exec(os_event_t *events) {
  ****************************************************************/
 static void ICACHE_FLASH_ATTR
 uart_exec(os_event_t *events) {
+
+	os_intr_lock();
+
 	uart_data_to_exec_t *dte = (uart_data_to_exec_t *) events->par;
 
 	switch (events->sig) {
@@ -210,6 +216,8 @@ uart_exec(os_event_t *events) {
 	default:
 		break;
 	}
+
+	os_intr_unlock();
 }
 
 //Init function 

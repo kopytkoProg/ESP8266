@@ -158,16 +158,23 @@ my_sent_next() {
 void ICACHE_FLASH_ATTR
 my_espconn_sent(at_linkConType *l, uint8_t *data, uint16_t length) {
 
-	add_to_sent_queue(l, data, length);
+	os_intr_lock();
 
+	add_to_sent_queue(l, data, length);
 	my_sent_next();
 
+	os_intr_unlock();
 }
 
 static void ICACHE_FLASH_ATTR
 on_task_serviced() {
+	os_intr_lock();
+
 	remove_first();
 	my_sent_next();
+
+	os_intr_unlock();
+
 }
 /***
  * Remove first task from queue when the task is waiting for successful send confirmation and the connection linked with
