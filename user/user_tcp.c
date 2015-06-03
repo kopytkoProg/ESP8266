@@ -34,7 +34,7 @@ get_link_by_linkId(uint8_t id) {
 
 	uint8_t i = 0;
 	for (i = 0; i < CONNECTION_SLOTS_SIZE; i++) {
-		if (!slot[i].free && slot[i].linkId == id)
+		if (slot[i].linkId == id)
 			return &slot[i];
 	}
 
@@ -159,6 +159,7 @@ void ICACHE_FLASH_ATTR
 my_espconn_sent(at_linkConType *l, uint8_t *data, uint16_t length) {
 
 	add_to_sent_queue(l, data, length);
+
 	my_sent_next();
 
 }
@@ -180,6 +181,67 @@ check_if_first_faill() {
 			on_task_serviced();
 		}
 	}
+}
+
+//----------------------------------------------------------------------------------
+//
+//----------------------------------------------------------------------------------
+
+#define DEBUG_CMD 				("{debug}")
+
+at_linkConType *debug = NULL;
+
+uint8_t ICACHE_FLASH_ATTR
+my_start_with(uint8_t *s1, uint8_t *s2) {
+
+	for (; *s1 == *s2; s1++, s2++) {
+		if (*s1 == '\0') {
+			return 0;
+		}
+	}
+
+	if (*s1 == '\0' || *s2 == '\0') {
+		return 0;
+	}
+
+	return 1;
+}
+
+static uint8_t ICACHE_FLASH_ATTR
+check_if_special_cmd(uint8_t *d, uint16_t l, at_linkConType *link) {
+
+	if (l == sizeof(DEBUG_CMD) - 1 && my_start_with(DEBUG_CMD, d) == 0) {
+		debug = link;
+		return 1;
+	}
+
+	return 0;
+}
+
+void ICACHE_FLASH_ATTR
+debug_print_str(uint8_t *d) {
+
+	if (debug == NULL || debug->free) {
+		debug = NULL;
+		return;
+	}
+
+	if (strlen(d) < 100)
+		my_espconn_sent(debug, d, strlen(d));
+
+}
+
+void ICACHE_FLASH_ATTR
+debug_print_bfr(uint8_t *d, uint16_t l) {
+
+	if (debug == NULL || debug->free) {
+		debug = NULL;
+		return;
+	}
+
+	if (l < 100)
+		my_espconn_sent(debug, d, l);
+
 }
 
 //----------------------------------------------------------------------------------
@@ -244,18 +306,27 @@ at_tcpclient_recv(void *arg, char *pdata, unsigned short len) {
 	// if end of packet reach then send the data to exec
 
 	if (*(s->data + s->len - 1) == '}') {
-		uart0_sendStr("END OF PACKET!");
 
-		tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) os_zalloc(sizeof(tcp_data_to_exec_t));
-		dte->len = s->len;
-		dte->data = s->data;
-		dte->link = s;
+		// uart0_sendStr("END OF PACKET!");
+		// debug_print_str("TCP: Packet received: \r\n");
+		// debug_print_bfr(s->data, s->len);
 
-		// now the executing process have to remove this data
-		s->len = 0;
+		if (check_if_special_cmd(s->data, s->len, s)) {
 
-		system_os_post(tcp_execTaskPrio, my_tcp_msg_comme, (uint32_t) dte);
+			s->len = 0;
 
+		} else {
+
+			tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) os_zalloc(sizeof(tcp_data_to_exec_t));
+			dte->len = s->len;
+			dte->data = s->data;
+			dte->link = s;
+
+			// now the executing process have to remove this data
+			s->len = 0;
+
+			system_os_post(tcp_execTaskPrio, my_tcp_msg_comme, (uint32_t) dte);
+		}
 	}
 }
 
@@ -308,7 +379,7 @@ at_tcpserver_discon_cb(void *arg) {
  */
 static void ICACHE_FLASH_ATTR
 at_tcpclient_sent_cb(void *arg) {
-	uart0_sendStr("at_tcpclient_sent_cb \n\r");
+	// uart0_sendStr("at_tcpclient_sent_cb \n\r");
 	on_task_serviced();
 }
 
@@ -327,7 +398,7 @@ at_tcpserver_listen(void *arg) {
 
 	pespconn->reverse = &slot[first_free_slot];
 
-	uart0_sendStr("at_tcpserver_listen \n\r");
+	// uart0_sendStr("at_tcpserver_listen \n\r");
 	espconn_regist_recvcb(pespconn, at_tcpclient_recv);
 	espconn_regist_reconcb(pespconn, at_tcpserver_recon_cb);
 	espconn_regist_disconcb(pespconn, at_tcpserver_discon_cb);

@@ -76,7 +76,7 @@ exec_data() {
 
 		//--------
 		uint8_t buffer[30];
-		os_sprintf(buffer, "<%d, %d>:", l->linkId, dte->len);
+		os_sprintf(buffer, "<%d, %d>", l->linkId, dte->len);
 		uart0_sendStr(buffer);
 		//--------
 
@@ -108,6 +108,7 @@ response(uint8_t *b, uint16_t size) {
 		dte_queue_count--;
 	} else {
 		uart0_sendStr("\r\nERROR: no task in queue! \r\n");
+		debug_print_str("\r\nERROR: no task in queue! \r\n");
 	}
 	main_state = Idle;
 }
@@ -140,12 +141,11 @@ tcp_exec(os_event_t *events) {
 	at_linkConType *l = (at_linkConType *) dte->link;
 	struct espconn *e = (struct espconn *) l->pCon;
 
+	debug_print_str("\r\n TCP msg: \r\n");
+	debug_print_bfr(dte->data, dte->len);
+
 	switch (events->sig) {
 	case my_tcp_msg_comme: {
-
-//		uint8_t c[] = "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss";
-//		my_espconn_sent(e, c, sizeof(c));
-//		c[100] = 'X';
 
 		if (add_task_to_queue(dte) == -1)
 			my_espconn_sent(l, ERJECTED, sizeof(ERJECTED));
@@ -155,9 +155,10 @@ tcp_exec(os_event_t *events) {
 		break;
 	case my_tcp_disconnect:
 
-		if (add_task_to_queue(dte) == -1)
+		if (add_task_to_queue(dte) == -1) {
 			uart0_sendStr("\r\nERROR: queue is full ! \r\n");
-
+			debug_print_str("\r\nERROR: queue is full ! \r\n");
+		}
 		exec_data();
 
 		break;
@@ -180,6 +181,10 @@ uart_exec(os_event_t *events) {
 	switch (events->sig) {
 	case my_headered_msg:
 
+
+		debug_print_str("\r\n UART headered msg: \r\n");
+		debug_print_bfr(dte->data, dte->len);
+
 		my_espconn_sent(get_link_by_linkId(dte->id), dte->data, dte->len);
 
 		os_free(dte->data);
@@ -188,7 +193,10 @@ uart_exec(os_event_t *events) {
 		break;
 	case my_unheadered_msg:
 
-		uart0_tx_buffer(dte->data, dte->len);
+		// uart0_tx_buffer(dte->data, dte->len);
+
+		debug_print_str("\r\n UART unheadered msg: \r\n");
+		debug_print_bfr(dte->data, dte->len);
 
 		// Id from uart data is not used (0)
 		response(dte->data, dte->len);
