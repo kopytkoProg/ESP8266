@@ -7,22 +7,17 @@
 #include "user_config.h"
 #include "osapi.h"
 
-/************************************************************************
- * Known issues:
- * - when someone connect as a first client then he get id = 0 and when he send something
- *   and disconnect and new client connect (and no other client) then he get id = 0
- *   so the uart client don have enough time to response to the first client, he respond
- *   to the second client
- *   Solution: next slot id: (i + next_slot) % MAX_CONNNECTION.
- ************************************************************************/
-
 //----------------------------------------------------------------------------------
 static struct espconn *pTcpServer;
 // uint8_t next_conn_id = 0;
-at_linkConType slot[MAX_CONNNECTION];
+at_linkConType slot[CONNECTION_SLOTS_SIZE];
 
 // uint8_t linkId_counter = MAX_CONNNECTION;
 
+static void ICACHE_FLASH_ATTR check_if_first_faill();
+
+//----------------------------------------------------------------------------------
+// This part response for connections (slots)
 //----------------------------------------------------------------------------------
 /***
  * pre:		id < MAX_CONNNECTION
@@ -38,7 +33,7 @@ at_linkConType * ICACHE_FLASH_ATTR
 get_link_by_linkId(uint8_t id) {
 
 	uint8_t i = 0;
-	for (i = 0; i < MAX_CONNNECTION; i++) {
+	for (i = 0; i < CONNECTION_SLOTS_SIZE; i++) {
 		if (!slot[i].free && slot[i].linkId == id)
 			return &slot[i];
 	}
@@ -50,7 +45,7 @@ void ICACHE_FLASH_ATTR
 init_slots() {
 
 	uint8_t i = 0;
-	for (i = 0; i < MAX_CONNNECTION; i++) {
+	for (i = 0; i < CONNECTION_SLOTS_SIZE; i++) {
 		slot[i].free = TRUE;
 		slot[i].linkId = i;
 
@@ -64,13 +59,127 @@ get_first_free_slot() {
 	int8_t i = 0;
 	int8_t r = -1;
 
-	for (i = 0; r == -1 && i < MAX_CONNNECTION; i++) {
-		if (slot[(i + next_slot) % MAX_CONNNECTION].free)
-			r = (i + next_slot) % MAX_CONNNECTION;
+	for (i = 0; r == -1 && i < CONNECTION_SLOTS_SIZE; i++) {
+		if (slot[(i + next_slot) % CONNECTION_SLOTS_SIZE].free)
+			r = (i + next_slot) % CONNECTION_SLOTS_SIZE;
 	}
 
 	next_slot = r + 1;
 	return r;
+}
+
+//----------------------------------------------------------------------------------
+// This part is response for buffering and sending message.
+// When user call two time my_espconn_sent then the first packet is sent and second packet wait until first one successful sent or fail
+// Msg fail when first packet in queue waiting for successful sent confirmation and the connection is closed
+//----------------------------------------------------------------------------------
+
+typedef enum {
+	Idle, WaitingForSend
+} my_send_state_t;
+
+typedef struct {
+	uint16_t length;
+	uint8_t *data;
+	at_linkConType *l;
+} my_send_queue_item_t;
+
+my_send_state_t my_send_state = Idle;
+my_send_queue_item_t my_send_queue[SENT_QUEUE_LENGTH];
+uint8_t my_send_queue_pointer = 0;
+uint8_t my_send_queue_count = 0;
+
+static uint8_t ICACHE_FLASH_ATTR
+first_in_queue() {
+	return ((my_send_queue_pointer + SENT_QUEUE_LENGTH) - my_send_queue_count) % SENT_QUEUE_LENGTH;
+}
+
+static void ICACHE_FLASH_ATTR
+add_to_sent_queue(at_linkConType *l, uint8_t *data, uint16_t length) {
+
+	if (my_send_queue_count < SENT_QUEUE_LENGTH) {
+
+		my_send_queue_item_t *i = &my_send_queue[my_send_queue_pointer];
+
+		uint16_t j = 0;
+		i->data = (uint8_t *) os_zalloc(length);
+		i->l = l;
+		i->length = length;
+
+		for (j = 0; j < length; ++j)
+			*(i->data + j) = *(data + j);
+
+		my_send_queue_pointer = (my_send_queue_pointer + 1) % SENT_QUEUE_LENGTH;
+		my_send_queue_count++;
+
+	}
+
+}
+
+/**
+ * Remove first task in queue and decrement size
+ */
+static void ICACHE_FLASH_ATTR
+remove_first() {
+
+	if (my_send_state == WaitingForSend && my_send_queue_count > 0) {
+		my_send_queue_item_t *i = &my_send_queue[first_in_queue()];
+
+		os_free(i->data);
+
+		my_send_queue_count--;
+		my_send_state = Idle;
+	}
+
+}
+
+/***
+ * Send data if in Idle state
+ */
+static void ICACHE_FLASH_ATTR
+my_sent_next() {
+
+	if (my_send_state == Idle && my_send_queue_count > 0) {
+
+		my_send_state = WaitingForSend;
+		my_send_queue_item_t *i = &my_send_queue[first_in_queue()];
+
+		// when the connection is closed do not send the data
+		if (i->l->free) {
+			remove_first();
+			my_sent_next();
+		} else {
+			espconn_sent(i->l->pCon, i->data, i->length);
+		}
+	}
+
+}
+
+void ICACHE_FLASH_ATTR
+my_espconn_sent(at_linkConType *l, uint8_t *data, uint16_t length) {
+
+	add_to_sent_queue(l, data, length);
+	my_sent_next();
+
+}
+
+static void ICACHE_FLASH_ATTR
+on_task_serviced() {
+	remove_first();
+	my_sent_next();
+}
+/***
+ * Remove first task from queue when the task is waiting for successful send confirmation and the connection linked with
+ * the task is closed (because fail ?).
+ */
+static void ICACHE_FLASH_ATTR
+check_if_first_faill() {
+	if (my_send_state == WaitingForSend) {
+		my_send_queue_item_t *i = &my_send_queue[first_in_queue()];
+		if (i->l->free) {
+			on_task_serviced();
+		}
+	}
 }
 
 //----------------------------------------------------------------------------------
@@ -95,13 +204,13 @@ at_tcpclient_recv(void *arg, char *pdata, unsigned short len) {
 	// it is first packet of data from this client
 	// the packet shuld start with '{'
 	if (s->len == 0 && len > 0 && *pdata != '{') {
-		espconn_sent(pespconn, INVALID_START_OF_TRANSMISION, sizeof(INVALID_START_OF_TRANSMISION));
+		my_espconn_sent(s, INVALID_START_OF_TRANSMISION, sizeof(INVALID_START_OF_TRANSMISION));
 		espconn_disconnect(pespconn);
 		return;
 	}
 
 	if (len + s->len > MAX_RECEIVE) {
-		espconn_sent(pespconn, TO_MANY_DATA, sizeof(TO_MANY_DATA));
+		my_espconn_sent(s, TO_MANY_DATA, sizeof(TO_MANY_DATA));
 		espconn_disconnect(pespconn);
 		return;
 	}
@@ -132,13 +241,6 @@ at_tcpclient_recv(void *arg, char *pdata, unsigned short len) {
 
 	}
 
-	//--------
-	//	uint8_t buffer[20];
-	//	os_sprintf(buffer, "<%d, %d, %d>:", s->linkId, len, s->len);
-	//	uart0_sendStr(buffer);
-	//--------
-	//	uart0_tx_buffer(s->data, s->len);
-
 	// if end of packet reach then send the data to exec
 
 	if (*(s->data + s->len - 1) == '}') {
@@ -161,6 +263,7 @@ static void ICACHE_FLASH_ATTR
 disconnect(void *arg) {
 	struct espconn *pespconn = (struct espconn *) arg;
 	at_linkConType *s = (at_linkConType *) pespconn->reverse;
+
 	s->free = TRUE;
 	if (s->len > 0)
 		os_free(s->data);
@@ -169,6 +272,8 @@ disconnect(void *arg) {
 	dte->len = 0;
 	dte->data = NULL;
 	dte->link = s;
+
+	check_if_first_faill();
 
 	system_os_post(tcp_execTaskPrio, my_tcp_disconnect, (uint32_t) dte);
 }
@@ -204,7 +309,7 @@ at_tcpserver_discon_cb(void *arg) {
 static void ICACHE_FLASH_ATTR
 at_tcpclient_sent_cb(void *arg) {
 	uart0_sendStr("at_tcpclient_sent_cb \n\r");
-
+	on_task_serviced();
 }
 
 LOCAL void ICACHE_FLASH_ATTR

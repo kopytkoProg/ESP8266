@@ -9,7 +9,7 @@
 #define NETWORK "255.255.255.0"
 #define GW "192.168.1.1"
 
-#define MAX_CONNNECTION 	10
+
 
 
 #define user_recvTaskPrio        		0

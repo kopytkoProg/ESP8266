@@ -9,6 +9,7 @@
 #include "osapi.h"
 #include "user_config.h"
 #include "user_utils.h"
+#include "user_tcp.h"
 
 os_event_t user_recvTaskQueue[user_recvTaskQueueLen];
 
@@ -68,7 +69,7 @@ on_char_come(uint8_t c) {
 				uart0_sendStr(buffer);
 			}
 
-			if (id >= 0 && id < MAX_CONNNECTION && size > 0 && size < BUFFER_SIZE)
+			if (id >= 0 && id < CONNECTION_SLOTS_SIZE && size > 0 && size < BUFFER_SIZE)
 				state = receiving_data;
 			else
 				uart0_sendStr("\r\nERROR: invalid id or size! \r\n");
@@ -79,6 +80,13 @@ on_char_come(uint8_t c) {
 		break;
 	case reciving_unknown_length_data:
 		//--------------------------------------------------------
+		if (p >= BUFFER_SIZE) {
+			uart0_sendStr("\r\nERROR: invalid id or size! \r\n");
+			state = waiting_for_cmd;
+			p = 0;
+			return;
+		}
+
 		buffer[p++] = c;
 
 		if (c == '}') {

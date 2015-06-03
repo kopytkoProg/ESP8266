@@ -24,7 +24,7 @@ typedef enum {
 user_exe_state_t main_state = Idle;
 tcp_data_to_exec_t *dte_in_progres;
 
-#define QUEUE_SIZE  10
+#define QUEUE_SIZE  20
 #define ERJECTED 	("Rejected!")
 
 uint8_t dte_queue_i = 0;
@@ -96,11 +96,12 @@ response(uint8_t *b, uint16_t size) {
 		struct espconn *e = (struct espconn *) l->pCon;
 
 		if (l->free && dte->len > 0) {
-			uart0_sendStr("\r\nERROR: connection closed! \r\n");
+			// uart0_sendStr("\r\nERROR: connection closed! \r\n");
+			// Do nothing when uart send response and the tcp client have disconnected
 		} else if (l->free) {	// when is response for closing info
 			// DO NOTHING WITH CONFIRMATION ABOUT TCP CLOSED CONNECTION
 		} else {
-			espconn_sent(e, b, size);
+			my_espconn_sent(l, b, size);
 		}
 
 		remove_tcp_data_to_exec(dte);
@@ -143,11 +144,11 @@ tcp_exec(os_event_t *events) {
 	case my_tcp_msg_comme: {
 
 //		uint8_t c[] = "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss";
-//		espconn_sent(e, c, sizeof(c));
+//		my_espconn_sent(e, c, sizeof(c));
 //		c[100] = 'X';
 
 		if (add_task_to_queue(dte) == -1)
-			espconn_sent(e, ERJECTED, sizeof(ERJECTED));
+			my_espconn_sent(l, ERJECTED, sizeof(ERJECTED));
 
 		exec_data();
 	}
@@ -179,7 +180,7 @@ uart_exec(os_event_t *events) {
 	switch (events->sig) {
 	case my_headered_msg:
 
-		espconn_sent(get_link_by_linkId(dte->id)->pCon, dte->data, dte->len);
+		my_espconn_sent(get_link_by_linkId(dte->id), dte->data, dte->len);
 
 		os_free(dte->data);
 		os_free(dte);

@@ -18,10 +18,16 @@ typedef struct {
 #define TRUE            true
 #define FALSE           false
 
-#define MAX_RECEIVE  	100
+#define SENT_QUEUE_LENGTH 				(20)
+#define CONNECTION_SLOTS_SIZE 			(20)
+
+// #define MAX_NUM_OF_CONNECTIONS 			(10)
+
+#define MAX_RECEIVE  					(100)
 #define TO_MANY_DATA 					("ERR: TO MANY DATA!")
 #define INVALID_START_OF_TRANSMISION 	("ERR: INVALID START OF TRANSMISION!")
 
 void ICACHE_FLASH_ATTR createServer();
 at_linkConType * ICACHE_FLASH_ATTR get_link_by_id(uint8_t id);
 at_linkConType * ICACHE_FLASH_ATTR get_link_by_linkId(uint8_t id);
+void ICACHE_FLASH_ATTR my_espconn_sent(at_linkConType *l, uint8_t *data, uint16_t length);
