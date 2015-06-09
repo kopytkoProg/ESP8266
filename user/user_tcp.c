@@ -158,22 +158,22 @@ my_sent_next() {
 void ICACHE_FLASH_ATTR
 my_espconn_sent(at_linkConType *l, uint8_t *data, uint16_t length) {
 
-	os_intr_lock();
+	// os_intr_lock();
 
 	add_to_sent_queue(l, data, length);
 	my_sent_next();
 
-	os_intr_unlock();
+	// os_intr_unlock();
 }
 
 static void ICACHE_FLASH_ATTR
 on_task_serviced() {
-	os_intr_lock();
+	// os_intr_lock();
 
 	remove_first();
 	my_sent_next();
 
-	os_intr_unlock();
+	// os_intr_unlock();
 
 }
 /***
@@ -332,7 +332,7 @@ at_tcpclient_recv(void *arg, char *pdata, unsigned short len) {
 			// now the executing process have to remove this data
 			s->len = 0;
 
-			system_os_post(tcp_execTaskPrio, my_tcp_msg_comme, (uint32_t) dte);
+			system_os_post(my_taskPrio, my_tcp_msg_comme, (uint32_t) dte);
 		}
 	}
 }
@@ -353,7 +353,7 @@ disconnect(void *arg) {
 
 	check_if_first_faill();
 
-	system_os_post(tcp_execTaskPrio, my_tcp_disconnect, (uint32_t) dte);
+	system_os_post(my_taskPrio, my_tcp_disconnect, (uint32_t) dte);
 }
 
 /**

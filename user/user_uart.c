@@ -106,7 +106,7 @@ on_char_come(uint8_t c) {
 			state = waiting_for_cmd;
 			p = 0;
 
-			system_os_post(uart_execTaskPrio, my_unheadered_msg, (uint32_t) dte);
+			system_os_post(my_taskPrio, my_uart_unheadered_msg, (uint32_t) dte);
 		}
 
 		break;
@@ -131,7 +131,7 @@ on_char_come(uint8_t c) {
 			state = waiting_for_cmd;
 			p = 0;
 
-			system_os_post(uart_execTaskPrio, my_headered_msg, (uint32_t) dte);
+			system_os_post(my_taskPrio, my_uart_headered_msg, (uint32_t) dte);
 		}
 
 		break;

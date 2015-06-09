@@ -10,10 +10,14 @@
 #include "user_tcp.h"
 #include "user_uart.h"
 
-os_event_t tcp_execTaskQueue[tcp_execTaskQueueLen];
-os_event_t uart_execTaskQueue[uart_execTaskQueueLen];
-// os_event_t tcp_dcTaskQueue[tcp_dcTaskQueueLen];
+// te function is here becaus of bug, more about this here http://bbs.espressif.com/viewtopic.php?t=486&p=1840
+void user_rf_pre_init(void){}
 
+// os_event_t tcp_execTaskQueue[tcp_execTaskQueueLen];
+// os_event_t uart_execTaskQueue[uart_execTaskQueueLen];
+os_event_t my_taskQueue[my_taskkQueueLen];
+
+// os_event_t tcp_dcTaskQueue[tcp_dcTaskQueueLen];
 static void tcp_exec(os_event_t *events);
 void createServer();
 
@@ -112,22 +116,7 @@ response(uint8_t *b, uint16_t size) {
 	}
 	main_state = Idle;
 }
-/****************************************************************
 
- ****************************************************************/
-//static void ICACHE_FLASH_ATTR
-//tcp_dc(os_event_t *events) {
-//	at_linkConType *l = (at_linkConType *) events->par;
-//
-//
-//	uart0_sendStr("\r\nCLOSED ! \r\n");
-//	if (add_task_to_queue(dte) == -1) {
-//		uart0_sendStr("\r\nERROR: queue is full ! \r\n");
-//	}
-//
-//	exec_data();
-//
-//}
 /****************************************************************
  * Remember to remove:
  * 		dte->data
@@ -136,8 +125,6 @@ response(uint8_t *b, uint16_t size) {
  ****************************************************************/
 static void ICACHE_FLASH_ATTR
 tcp_exec(os_event_t *events) {
-
-	os_intr_lock();
 
 	tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) events->par;
 	at_linkConType *l = (at_linkConType *) dte->link;
@@ -168,7 +155,6 @@ tcp_exec(os_event_t *events) {
 		break;
 	}
 
-	os_intr_unlock();
 }
 
 /****************************************************************
@@ -180,13 +166,10 @@ tcp_exec(os_event_t *events) {
 static void ICACHE_FLASH_ATTR
 uart_exec(os_event_t *events) {
 
-	os_intr_lock();
-
 	uart_data_to_exec_t *dte = (uart_data_to_exec_t *) events->par;
 
 	switch (events->sig) {
-	case my_headered_msg:
-
+	case my_uart_headered_msg:
 
 		debug_print_str("\r\n UART headered msg: \r\n");
 		debug_print_bfr(dte->data, dte->len);
@@ -197,9 +180,7 @@ uart_exec(os_event_t *events) {
 		os_free(dte);
 
 		break;
-	case my_unheadered_msg:
-
-		// uart0_tx_buffer(dte->data, dte->len);
+	case my_uart_unheadered_msg:
 
 		debug_print_str("\r\n UART unheadered msg: \r\n");
 		debug_print_bfr(dte->data, dte->len);
@@ -216,8 +197,35 @@ uart_exec(os_event_t *events) {
 	default:
 		break;
 	}
+}
 
-	os_intr_unlock();
+static void ICACHE_FLASH_ATTR
+task(os_event_t *events) {
+
+	switch (events->sig) {
+	case my_tcp_msg_comme:
+
+		tcp_exec(events);
+
+		break;
+	case my_tcp_disconnect:
+
+		tcp_exec(events);
+
+		break;
+	case my_uart_unheadered_msg:
+
+		uart_exec(events);
+
+		break;
+	case my_uart_headered_msg:
+
+		uart_exec(events);
+
+		break;
+	default:
+		break;
+	}
 }
 
 //Init function 
@@ -239,8 +247,10 @@ user_init() {
 	uart0_sendStr("CreatingServer...\r\n");
 	createServer();
 
-	system_os_task(tcp_exec, tcp_execTaskPrio, tcp_execTaskQueue, tcp_execTaskQueueLen);
-	system_os_task(uart_exec, uart_execTaskPrio, uart_execTaskQueue, uart_execTaskQueueLen);
+	system_os_task(task, my_taskPrio, my_taskQueue, my_taskkQueueLen);
+
+//	system_os_task(tcp_exec, tcp_execTaskPrio, tcp_execTaskQueue, tcp_execTaskQueueLen);
+//	system_os_task(uart_exec, uart_execTaskPrio, uart_execTaskQueue, uart_execTaskQueueLen);
 	//system_os_task(tcp_dc, tcp_dcTaskPrio, tcp_dcTaskQueue, tcp_dcTaskQueueLen);
 
 }
