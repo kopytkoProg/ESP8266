@@ -24,7 +24,8 @@ at_japChack(void *arg) {
 
 }
 
-void setup_wifi() {
+void ICACHE_FLASH_ATTR
+setup_wifi() {
 	char ssid[32] = SSID;
 	char password[64] = SSID_PASSWORD;
 	struct station_config stationConf;

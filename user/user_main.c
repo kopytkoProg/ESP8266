@@ -9,9 +9,11 @@
 #include "user_wifi.h"
 #include "user_tcp.h"
 #include "user_uart.h"
+#include "utils/fifo_buffer.h"
 
 // te function is here becaus of bug, more about this here http://bbs.espressif.com/viewtopic.php?t=486&p=1840
-void user_rf_pre_init(void){}
+void user_rf_pre_init(void) {
+}
 
 // os_event_t tcp_execTaskQueue[tcp_execTaskQueueLen];
 // os_event_t uart_execTaskQueue[uart_execTaskQueueLen];
@@ -31,27 +33,30 @@ tcp_data_to_exec_t *dte_in_progres;
 #define QUEUE_SIZE  20
 #define ERJECTED 	("Rejected!")
 
-uint8_t dte_queue_i = 0;
-uint8_t dte_queue_count = 0;
-tcp_data_to_exec_t *dte_queue[QUEUE_SIZE];
+fifo_buffer_t fifo_buffer;
+fifo_buffer_t *queue = &fifo_buffer;
 
-static uint8_t ICACHE_FLASH_ATTR
-first_in_queue() {
-	return ((dte_queue_i + QUEUE_SIZE) - dte_queue_count) % QUEUE_SIZE;
-}
+//uint8_t dte_queue_i = 0;
+//uint8_t dte_queue_count = 0;
+//tcp_data_to_exec_t *dte_queue[QUEUE_SIZE];
 
-static int8_t ICACHE_FLASH_ATTR
-add_task_to_queue(tcp_data_to_exec_t *dte) {
+//static uint8_t ICACHE_FLASH_ATTR
+//first_in_queue() {
+//	return ((dte_queue_i + QUEUE_SIZE) - dte_queue_count) % QUEUE_SIZE;
+//}
 
-	if (dte_queue_count >= QUEUE_SIZE)
-		return -1;
-
-	dte_queue[dte_queue_i] = dte;
-	dte_queue_i = (dte_queue_i + 1) % QUEUE_SIZE;
-	dte_queue_count++;
-
-	return 0;
-}
+//static int8_t ICACHE_FLASH_ATTR
+//add_task_to_queue(tcp_data_to_exec_t *dte) {
+//
+//	if (dte_queue_count >= QUEUE_SIZE)
+//		return -1;
+//
+//	dte_queue[dte_queue_i] = dte;
+//	dte_queue_i = (dte_queue_i + 1) % QUEUE_SIZE;
+//	dte_queue_count++;
+//
+//	return 0;
+//}
 
 static void ICACHE_FLASH_ATTR
 remove_tcp_data_to_exec(tcp_data_to_exec_t *dte) {
@@ -63,14 +68,16 @@ remove_tcp_data_to_exec(tcp_data_to_exec_t *dte) {
 static void ICACHE_FLASH_ATTR
 exec_data() {
 
-	if (main_state == Idle && dte_queue_count > 0) {
-		tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) dte_queue[first_in_queue()];
+	if (main_state == Idle && !fifo_is_empty(queue)) {
+		tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) fifo_first(queue);
+		if (dte == NULL) uart0_sendStr("\r\nERROR:NULL! \r\n");
+
 
 		// if dte is closing info then let it do
 		if (dte->link->free && dte->len > 0) { 				// closed
 		// remove because no one get response
+			fifo_pop(queue);
 			remove_tcp_data_to_exec(dte);
-			dte_queue_count--;
 			return exec_data();
 		}
 		main_state = WaitingForResponse;
@@ -93,9 +100,9 @@ exec_data() {
 static void ICACHE_FLASH_ATTR
 response(uint8_t *b, uint16_t size) {
 
-	if (dte_queue_count > 0) {
+	if (!fifo_is_empty(queue)) {
 
-		tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) dte_queue[first_in_queue()];
+		tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) fifo_pop(queue);
 		at_linkConType *l = (at_linkConType *) dte->link;
 		struct espconn *e = (struct espconn *) l->pCon;
 
@@ -109,7 +116,7 @@ response(uint8_t *b, uint16_t size) {
 		}
 
 		remove_tcp_data_to_exec(dte);
-		dte_queue_count--;
+
 	} else {
 		uart0_sendStr("\r\nERROR: no task in queue! \r\n");
 		debug_print_str("\r\nERROR: no task in queue! \r\n");
@@ -136,7 +143,7 @@ tcp_exec(os_event_t *events) {
 	switch (events->sig) {
 	case my_tcp_msg_comme: {
 
-		if (add_task_to_queue(dte) == -1)
+		if (fifo_push(queue, dte) == -1)
 			my_espconn_sent(l, ERJECTED, sizeof(ERJECTED));
 
 		exec_data();
@@ -144,7 +151,7 @@ tcp_exec(os_event_t *events) {
 		break;
 	case my_tcp_disconnect:
 
-		if (add_task_to_queue(dte) == -1) {
+		if (fifo_push(queue, dte) == -1) {
 			uart0_sendStr("\r\nERROR: queue is full ! \r\n");
 			debug_print_str("\r\nERROR: queue is full ! \r\n");
 		}
@@ -235,6 +242,8 @@ user_init() {
 	// ---------------- my uart ----------------
 	user_uart_init();
 	//Set station mode
+
+	fifo_init(queue, QUEUE_SIZE);
 
 	//Set ap settings
 	uart0_sendStr("\r\n");

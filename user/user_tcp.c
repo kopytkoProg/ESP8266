@@ -6,6 +6,7 @@
 #include "user_tcp.h"
 #include "user_config.h"
 #include "osapi.h"
+#include "utils/fifo_buffer.h"
 
 //----------------------------------------------------------------------------------
 static struct espconn *pTcpServer;
@@ -84,22 +85,18 @@ typedef struct {
 	at_linkConType *l;
 } my_send_queue_item_t;
 
-my_send_state_t my_send_state = Idle;
-my_send_queue_item_t my_send_queue[SENT_QUEUE_LENGTH];
-uint8_t my_send_queue_pointer = 0;
-uint8_t my_send_queue_count = 0;
+fifo_buffer_t msg_fifo_buffer;
+fifo_buffer_t *msg_queue = &msg_fifo_buffer;
 
-static uint8_t ICACHE_FLASH_ATTR
-first_in_queue() {
-	return ((my_send_queue_pointer + SENT_QUEUE_LENGTH) - my_send_queue_count) % SENT_QUEUE_LENGTH;
-}
+my_send_state_t my_send_state = Idle;
+
 
 static void ICACHE_FLASH_ATTR
 add_to_sent_queue(at_linkConType *l, uint8_t *data, uint16_t length) {
 
-	if (my_send_queue_count < SENT_QUEUE_LENGTH) {
+	if (!fifo_is_full(msg_queue)) {
 
-		my_send_queue_item_t *i = &my_send_queue[my_send_queue_pointer];
+		my_send_queue_item_t *i = (my_send_queue_item_t *) os_zalloc(sizeof(my_send_queue_item_t));
 
 		uint16_t j = 0;
 		i->data = (uint8_t *) os_zalloc(length);
@@ -109,8 +106,7 @@ add_to_sent_queue(at_linkConType *l, uint8_t *data, uint16_t length) {
 		for (j = 0; j < length; ++j)
 			*(i->data + j) = *(data + j);
 
-		my_send_queue_pointer = (my_send_queue_pointer + 1) % SENT_QUEUE_LENGTH;
-		my_send_queue_count++;
+		fifo_push(msg_queue, i);
 
 	}
 
@@ -122,12 +118,12 @@ add_to_sent_queue(at_linkConType *l, uint8_t *data, uint16_t length) {
 static void ICACHE_FLASH_ATTR
 remove_first() {
 
-	if (my_send_state == WaitingForSend && my_send_queue_count > 0) {
-		my_send_queue_item_t *i = &my_send_queue[first_in_queue()];
+	if (my_send_state == WaitingForSend && !fifo_is_empty(msg_queue)) {
+		my_send_queue_item_t *i = (my_send_queue_item_t *) fifo_pop(msg_queue);
 
 		os_free(i->data);
+		os_free(i);
 
-		my_send_queue_count--;
 		my_send_state = Idle;
 	}
 
@@ -139,10 +135,10 @@ remove_first() {
 static void ICACHE_FLASH_ATTR
 my_sent_next() {
 
-	if (my_send_state == Idle && my_send_queue_count > 0) {
+	if (my_send_state == Idle && !fifo_is_empty(msg_queue)) {
 
 		my_send_state = WaitingForSend;
-		my_send_queue_item_t *i = &my_send_queue[first_in_queue()];
+		my_send_queue_item_t *i = (my_send_queue_item_t *) fifo_first(msg_queue);
 
 		// when the connection is closed do not send the data
 		if (i->l->free) {
@@ -183,7 +179,7 @@ on_task_serviced() {
 static void ICACHE_FLASH_ATTR
 check_if_first_faill() {
 	if (my_send_state == WaitingForSend) {
-		my_send_queue_item_t *i = &my_send_queue[first_in_queue()];
+		my_send_queue_item_t *i = (my_send_queue_item_t *) fifo_first(msg_queue);
 		if (i->l->free) {
 			on_task_serviced();
 		}
@@ -191,10 +187,10 @@ check_if_first_faill() {
 }
 
 //----------------------------------------------------------------------------------
-//
+// This part is response for debuging thru TCP
 //----------------------------------------------------------------------------------
 
-#define DEBUG_CMD 				("{debug}")
+#define DEBUG_CMD 				("{debug-esp8266}")
 
 at_linkConType *debug = NULL;
 
@@ -417,6 +413,7 @@ void ICACHE_FLASH_ATTR
 createServer() {
 
 	init_slots();
+	fifo_init(msg_queue, SENT_QUEUE_LENGTH);
 
 	pTcpServer = (struct espconn *) os_zalloc(sizeof(struct espconn));
 	if (pTcpServer == NULL) {
