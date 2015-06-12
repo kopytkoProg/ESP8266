@@ -18,8 +18,8 @@ typedef struct {
 #define TRUE            true
 #define FALSE           false
 
-#define SENT_QUEUE_LENGTH 				(20)
-#define CONNECTION_SLOTS_SIZE 			(20)
+#define SENT_QUEUE_LENGTH 				(40)
+#define CONNECTION_SLOTS_SIZE 			(10)
 
 // #define MAX_NUM_OF_CONNECTIONS 			(10)
 

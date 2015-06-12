@@ -30,33 +30,13 @@ typedef enum {
 user_exe_state_t main_state = Idle;
 tcp_data_to_exec_t *dte_in_progres;
 
-#define QUEUE_SIZE  20
+#define QUEUE_SIZE  40
 #define ERJECTED 	("Rejected!")
 
 fifo_buffer_t fifo_buffer;
 fifo_buffer_t *queue = &fifo_buffer;
 
-//uint8_t dte_queue_i = 0;
-//uint8_t dte_queue_count = 0;
-//tcp_data_to_exec_t *dte_queue[QUEUE_SIZE];
 
-//static uint8_t ICACHE_FLASH_ATTR
-//first_in_queue() {
-//	return ((dte_queue_i + QUEUE_SIZE) - dte_queue_count) % QUEUE_SIZE;
-//}
-
-//static int8_t ICACHE_FLASH_ATTR
-//add_task_to_queue(tcp_data_to_exec_t *dte) {
-//
-//	if (dte_queue_count >= QUEUE_SIZE)
-//		return -1;
-//
-//	dte_queue[dte_queue_i] = dte;
-//	dte_queue_i = (dte_queue_i + 1) % QUEUE_SIZE;
-//	dte_queue_count++;
-//
-//	return 0;
-//}
 
 static void ICACHE_FLASH_ATTR
 remove_tcp_data_to_exec(tcp_data_to_exec_t *dte) {
@@ -145,8 +125,8 @@ tcp_exec(os_event_t *events) {
 
 		if (fifo_push(queue, dte) == -1)
 			my_espconn_sent(l, ERJECTED, sizeof(ERJECTED));
-
-		exec_data();
+		else
+			exec_data();
 	}
 		break;
 	case my_tcp_disconnect:
@@ -155,7 +135,8 @@ tcp_exec(os_event_t *events) {
 			uart0_sendStr("\r\nERROR: queue is full ! \r\n");
 			debug_print_str("\r\nERROR: queue is full ! \r\n");
 		}
-		exec_data();
+		else
+			exec_data();
 
 		break;
 	default:

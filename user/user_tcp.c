@@ -90,7 +90,6 @@ fifo_buffer_t *msg_queue = &msg_fifo_buffer;
 
 my_send_state_t my_send_state = Idle;
 
-
 static void ICACHE_FLASH_ATTR
 add_to_sent_queue(at_linkConType *l, uint8_t *data, uint16_t length) {
 
@@ -215,6 +214,8 @@ check_if_special_cmd(uint8_t *d, uint16_t l, at_linkConType *link) {
 
 	if (l == sizeof(DEBUG_CMD) - 1 && my_start_with(DEBUG_CMD, d) == 0) {
 		debug = link;
+		// remove received data from memory
+		os_free(d);
 		return 1;
 	}
 
