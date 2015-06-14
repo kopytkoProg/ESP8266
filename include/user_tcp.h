@@ -32,5 +32,5 @@ at_linkConType * ICACHE_FLASH_ATTR get_link_by_id(uint8_t id);
 at_linkConType * ICACHE_FLASH_ATTR get_link_by_linkId(uint8_t id);
 void ICACHE_FLASH_ATTR my_espconn_sent(at_linkConType *l, uint8_t *data, uint16_t length);
 
-void ICACHE_FLASH_ATTR debug_print_bfr(uint8_t *d, uint16_t l);
-void ICACHE_FLASH_ATTR debug_print_str(uint8_t *d);
+//void ICACHE_FLASH_ATTR debug_print_bfr(uint8_t *d, uint16_t l);
+//void ICACHE_FLASH_ATTR debug_print_str(uint8_t *d);

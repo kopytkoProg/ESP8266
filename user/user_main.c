@@ -10,6 +10,8 @@
 #include "user_tcp.h"
 #include "user_uart.h"
 #include "utils/fifo_buffer.h"
+#include "user_debug.h"
+#include "user_special_commands.h"
 
 // te function is here becaus of bug, more about this here http://bbs.espressif.com/viewtopic.php?t=486&p=1840
 void user_rf_pre_init(void) {
@@ -36,8 +38,6 @@ tcp_data_to_exec_t *dte_in_progres;
 fifo_buffer_t fifo_buffer;
 fifo_buffer_t *queue = &fifo_buffer;
 
-
-
 static void ICACHE_FLASH_ATTR
 remove_tcp_data_to_exec(tcp_data_to_exec_t *dte) {
 	if (dte->data != NULL && dte->len > 0)
@@ -50,8 +50,8 @@ exec_data() {
 
 	if (main_state == Idle && !fifo_is_empty(queue)) {
 		tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) fifo_first(queue);
-		if (dte == NULL) uart0_sendStr("\r\nERROR:NULL! \r\n");
-
+		if (dte == NULL)
+			uart0_sendStr("\r\nERROR:NULL! \r\n");
 
 		// if dte is closing info then let it do
 		if (dte->link->free && dte->len > 0) { 				// closed
@@ -123,10 +123,15 @@ tcp_exec(os_event_t *events) {
 	switch (events->sig) {
 	case my_tcp_msg_comme: {
 
-		if (fifo_push(queue, dte) == -1)
-			my_espconn_sent(l, ERJECTED, sizeof(ERJECTED));
-		else
-			exec_data();
+		if (special_cmd(dte->data, dte->len, l)) {
+			remove_tcp_data_to_exec(dte);
+		} else {
+
+			if (fifo_push(queue, dte) == -1)
+				my_espconn_sent(l, ERJECTED, sizeof(ERJECTED));
+			else
+				exec_data();
+		}
 	}
 		break;
 	case my_tcp_disconnect:
@@ -134,8 +139,7 @@ tcp_exec(os_event_t *events) {
 		if (fifo_push(queue, dte) == -1) {
 			uart0_sendStr("\r\nERROR: queue is full ! \r\n");
 			debug_print_str("\r\nERROR: queue is full ! \r\n");
-		}
-		else
+		} else
 			exec_data();
 
 		break;
