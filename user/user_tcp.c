@@ -8,7 +8,7 @@
 #include "osapi.h"
 #include "utils/fifo_buffer.h"
 #include "user_debug.h"
-
+#include "stdlib.h"
 
 //----------------------------------------------------------------------------------
 static struct espconn *pTcpServer;
@@ -162,6 +162,32 @@ my_espconn_sent(at_linkConType *l, uint8_t *data, uint16_t length) {
 
 	// os_intr_unlock();
 }
+/**
+ * send msg with header
+ */
+void ICACHE_FLASH_ATTR
+my_espconn_sent_headered(at_linkConType *l, uint8_t *data, uint16_t length, uint8_t *header, uint16_t headerLength) {
+
+	//---------------------------------------------------------------
+	// headeredMsg:	{
+	// b:			{som text}
+	// args:		1000
+	// headeredMsg: { + args + b[1:]
+	// headeredMsg:	{1000|som text}
+
+	// add header
+
+	uint8_t headeredMsg[length + headerLength + 1];
+
+	headeredMsg[0] = '{';
+	memcpy(&headeredMsg[1], header, headerLength);
+	headeredMsg[1 + headerLength] = '|';
+	memcpy(&headeredMsg[1 + headerLength + 1], &data[1], length - 1);
+
+	//---------------------------------------------------------------
+
+	my_espconn_sent(l, headeredMsg, length + headerLength + 1);
+}
 
 static void ICACHE_FLASH_ATTR
 on_task_serviced() {
@@ -258,6 +284,37 @@ at_tcpclient_recv(void *arg, char *pdata, unsigned short len) {
 		dte->len = s->len;
 		dte->data = s->data;
 		dte->link = s;
+		dte->header = NULL;
+		dte->content = NULL;
+
+		//---------------------------------------------------------------
+		// get substring of header
+		uint8_t *endOfHeader = strchr(dte->data, '|');
+
+		if (endOfHeader != NULL) {
+			uint8_t sizeOfHeader = endOfHeader - &dte->data[1];
+			uint8_t *header = (uint8_t *) os_zalloc(sizeOfHeader + 1);	// + 1 because string end char needed
+			memcpy(header, &dte->data[1], sizeOfHeader);
+			header[sizeOfHeader] = '\0';
+			dte->header = header;
+		}
+		//---------------------------------------------------------------
+		if (endOfHeader != NULL) {
+			uint8_t sizeOfHeader = endOfHeader - dte->data;
+			uint8_t sizeOfMsg = dte->len - sizeOfHeader;
+			uint8_t *content = (uint8_t *) os_zalloc(sizeOfMsg + 1);	// + 1 because string end char needed
+			memcpy(content, endOfHeader, sizeOfMsg);
+			content[0] = '{';
+			content[sizeOfMsg] = '\0';
+			dte->content = content;
+		}
+		else {
+			uint8_t *content = (uint8_t *) os_zalloc(dte->len + 1);		// + 1 because string end char needed
+			memcpy(content, dte->data, dte->len);
+			content[dte->len] = '\0';
+			dte->content = content;
+		}
+		//---------------------------------------------------------------
 
 		// now the executing process have to remove this data
 		s->len = 0;
@@ -280,6 +337,8 @@ disconnect(void *arg) {
 	dte->len = 0;
 	dte->data = NULL;
 	dte->link = s;
+	dte->header = NULL;
+	dte->content = NULL;
 
 	check_if_first_faill();
 

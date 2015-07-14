@@ -1,0 +1,3 @@
+eclipse.preferences.version=1
+org.eclipse.linuxtools.tools.launch.core.LinuxtoolsPath=/opt/Espressif/crosstool-NG/builds/xtensa-lx106-elf/bin
+org.eclipse.linuxtools.tools.launch.core.LinuxtoolsSystemEnvPath=false

@@ -21,7 +21,10 @@ FW_BASE		= firmware
 XTENSA_TOOLS_ROOT ?= /opt/Espressif/crosstool-NG/builds/xtensa-lx106-elf/bin
 
 # base directory of the ESP8266 SDK package, absolute
-SDK_BASE	?= /opt/Espressif/ESP8266_SDK
+# SDK_BASE	?= /opt/Espressif/ESP8266_SDK
+# SDK_BASE	?= /opt/Espressif/esp_iot_sdk_v1.0.1_b1_15_04_02/esp_iot_sdk_v1.0.1_b1
+SDK_BASE	?= /opt/Espressif/esp_iot_sdk_v1.1.1
+
 
 # esptool.py path and port
 ESPTOOL		?= /opt/Espressif/esptool-py/esptool.py
@@ -31,7 +34,7 @@ ESPPORT		?= /dev/ttyUSB0
 TARGET		= app
 
 # which modules (subdirectories) of the project to include in compiling
-MODULES		= driver user
+MODULES		= driver user user/utils
 EXTRA_INCDIR    = include
 
 # libraries used in this project, mainly provided by the SDK

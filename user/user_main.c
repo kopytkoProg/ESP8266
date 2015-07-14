@@ -42,6 +42,11 @@ static void ICACHE_FLASH_ATTR
 remove_tcp_data_to_exec(tcp_data_to_exec_t *dte) {
 	if (dte->data != NULL && dte->len > 0)
 		os_free(dte->data);
+	if (dte->header != NULL)
+		os_free(dte->header);
+	if (dte->content != NULL)
+		os_free(dte->content);
+
 	os_free(dte);
 }
 
@@ -65,14 +70,22 @@ exec_data() {
 		at_linkConType *l = (at_linkConType *) dte->link;
 		struct espconn *e = (struct espconn *) l->pCon;
 
+		uint8_t *b = dte->data;
+		uint8_t len = dte->len;
+
+		if (dte->content != NULL) {
+			b = dte->content;
+			len = strlen(b);
+		}
+
 		//--------
 		uint8_t buffer[30];
-		os_sprintf(buffer, "<%d, %d>", l->linkId, dte->len);
+		os_sprintf(buffer, "<%d, %d>", l->linkId, len);
 		uart0_sendStr(buffer);
 		//--------
 
-		if (dte->len > 0)
-			uart0_tx_buffer(dte->data, dte->len);
+		if (len > 0)
+			uart0_tx_buffer(b, len);
 
 	}
 }
@@ -92,7 +105,7 @@ response(uint8_t *b, uint16_t size) {
 		} else if (l->free) {	// when is response for closing info
 			// DO NOTHING WITH CONFIRMATION ABOUT TCP CLOSED CONNECTION
 		} else {
-			my_espconn_sent(l, b, size);
+			my_espconn_sent_headered(l, b, size, dte->header, strlen(dte->header));
 		}
 
 		remove_tcp_data_to_exec(dte);
@@ -123,7 +136,7 @@ tcp_exec(os_event_t *events) {
 	switch (events->sig) {
 	case my_tcp_msg_comme: {
 
-		if (special_cmd(dte->data, dte->len, l)) {
+		if (special_cmd(dte)) {
 			remove_tcp_data_to_exec(dte);
 		} else {
 
@@ -220,6 +233,7 @@ task(os_event_t *events) {
 	}
 }
 
+
 //Init function 
 void ICACHE_FLASH_ATTR
 user_init() {
@@ -242,6 +256,8 @@ user_init() {
 	createServer();
 
 	system_os_task(task, my_taskPrio, my_taskQueue, my_taskkQueueLen);
+
+
 
 //	system_os_task(tcp_exec, tcp_execTaskPrio, tcp_execTaskQueue, tcp_execTaskQueueLen);
 //	system_os_task(uart_exec, uart_execTaskPrio, uart_execTaskQueue, uart_execTaskQueueLen);

@@ -7,7 +7,17 @@ typedef struct {
 	uint16_t len;
 } at_linkConType;
 
+/***
+ * {
+ * 		data: 		'{11|content}'
+ * 		header: 	'11'			// end with 0 (str)
+* 		content:	'{content}'		// end with 0 (str)
+ * }
+ *
+ */
 typedef struct {
+	uint8_t *header;
+	uint8_t *content;
 	uint8_t *data;
 	uint16_t len;
 	at_linkConType *link;
@@ -31,6 +41,7 @@ void ICACHE_FLASH_ATTR createServer();
 at_linkConType * ICACHE_FLASH_ATTR get_link_by_id(uint8_t id);
 at_linkConType * ICACHE_FLASH_ATTR get_link_by_linkId(uint8_t id);
 void ICACHE_FLASH_ATTR my_espconn_sent(at_linkConType *l, uint8_t *data, uint16_t length);
+void ICACHE_FLASH_ATTR my_espconn_sent_headered(at_linkConType *l, uint8_t *data, uint16_t length, uint8_t *header, uint16_t headerLength);
 
 //void ICACHE_FLASH_ATTR debug_print_bfr(uint8_t *d, uint16_t l);
 //void ICACHE_FLASH_ATTR debug_print_str(uint8_t *d);

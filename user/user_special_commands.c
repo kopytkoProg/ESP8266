@@ -15,9 +15,8 @@
 // This part is response for special command {debuging, keep alive} thru TCP
 //----------------------------------------------------------------------------------
 
-
-
 at_linkConType *debug = NULL;
+at_linkConType *netInfo = NULL;
 
 uint8_t ICACHE_FLASH_ATTR
 my_start_with(uint8_t *s1, uint8_t *s2) {
@@ -35,17 +34,80 @@ my_start_with(uint8_t *s1, uint8_t *s2) {
 	return 1;
 }
 
-uint8_t ICACHE_FLASH_ATTR
-special_cmd(uint8_t *d, uint16_t l, at_linkConType *link) {
-	uint8_t result = 0;
+uint8_t *authDesc[] = { "OPEN", "WEP", "WPA_PSK", "WPA2_PSK", "WPA_WPA2_PSK" };
 
-	if (l == sizeof(DEBUG_CMD) - 1 && my_start_with(DEBUG_CMD, d) == 0) {
+/**
+ * @brief  Wifi ap scan over callback to display.
+ * @param  arg: contain the aps information
+ * @param  status: scan over status
+ * @retval None
+ */
+static void ICACHE_FLASH_ATTR
+scan_done(void *arg, STATUS status) {
+	uint8 ssid[33];
+	char temp[128];
+
+	if (status == OK) {
+		struct bss_info *bss_link = (struct bss_info *) arg;
+		bss_link = bss_link->next.stqe_next;			//ignore first
+
+		while (bss_link != NULL ) {
+			os_memset(ssid, 0, 33);
+			if (os_strlen(bss_link->ssid) <= 32) {
+				os_memcpy(ssid, bss_link->ssid, os_strlen(bss_link->ssid));
+			} else {
+				os_memcpy(ssid, bss_link->ssid, 32);
+			}
+			os_sprintf(temp, "{wifiInfo-esp8266(%s,\"%s\",%d dBm,\""MACSTR"\",%d)}", authDesc[bss_link->authmode], ssid, bss_link->rssi,
+					MAC2STR(bss_link->bssid), bss_link->channel);
+
+			if (netInfo == NULL || netInfo->free) {
+				netInfo = NULL;
+				return;
+			}
+
+			my_espconn_sent(netInfo, temp, strlen(temp));
+			debug_print_str(temp);
+
+			bss_link = bss_link->next.stqe_next;
+		}
+
+	} else {
+
+	}
+}
+
+uint8_t ICACHE_FLASH_ATTR
+special_cmd(tcp_data_to_exec_t *dte) {
+	at_linkConType *link = (at_linkConType *) dte->link;
+	//uint8_t *d, uint16_t l, at_linkConType *link
+	uint8_t result = 1;
+
+	if (strcmp(dte->content, DEBUG_CMD) == 0) {
+
 		debug = link;
 
-		result = 1;
-	} else if (l == sizeof(KEEP_ALIVE_CMD) - 1 && my_start_with(KEEP_ALIVE_CMD, d) == 0) {
-		my_espconn_sent(link, KEEP_ALIVE_CMD, strlen(KEEP_ALIVE_CMD));
-		result = 1;
+	} else if (strcmp(dte->content, KEEP_ALIVE_CMD) == 0) {
+
+		my_espconn_sent_headered(link, KEEP_ALIVE_CMD, strlen(KEEP_ALIVE_CMD), dte->header, strlen(dte->header));
+
+	} else if (strcmp(dte->content, SCAN_NETWORK) == 0) {
+
+		wifi_station_scan(NULL, scan_done);
+		my_espconn_sent_headered(link, SCAN_NETWORK, strlen(SCAN_NETWORK), dte->header, strlen(dte->header));
+		netInfo = link;
+
+	} else if (strcmp(dte->content, MAC_INFO) == 0) {
+		uint8_t temp[100];
+		uint8_t mac[6];
+		wifi_get_macaddr(SOFTAP_IF, mac);
+		os_sprintf(temp, "{macInfo-esp8266(\""MACSTR"\")}", MAC2STR(mac));
+		my_espconn_sent_headered(link, temp, strlen(temp), dte->header, strlen(dte->header));
+
+	} else {
+
+		result = 0;
+
 	}
 
 	return result;
