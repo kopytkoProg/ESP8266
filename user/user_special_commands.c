@@ -58,7 +58,7 @@ scan_done(void *arg, STATUS status) {
 			} else {
 				os_memcpy(ssid, bss_link->ssid, 32);
 			}
-			os_sprintf(temp, "{wifiInfo-esp8266(%s,\"%s\",%d dBm,\""MACSTR"\",%d)}", authDesc[bss_link->authmode], ssid, bss_link->rssi,
+			os_sprintf(temp, "{%s,\"%s\",%d dBm,\""MACSTR"\",%d}", authDesc[bss_link->authmode], ssid, bss_link->rssi,
 					MAC2STR(bss_link->bssid), bss_link->channel);
 
 			if (netInfo == NULL || netInfo->free) {
@@ -66,7 +66,7 @@ scan_done(void *arg, STATUS status) {
 				return;
 			}
 
-			my_espconn_sent(netInfo, temp, strlen(temp));
+			my_espconn_sent_headered(netInfo, temp, strlen(temp), ASYNC_HEADER_WIFI_INFO, strlen(ASYNC_HEADER_WIFI_INFO));
 			debug_print_str(temp);
 
 			bss_link = bss_link->next.stqe_next;
@@ -91,17 +91,17 @@ special_cmd(tcp_data_to_exec_t *dte) {
 
 		my_espconn_sent_headered(link, KEEP_ALIVE_CMD, strlen(KEEP_ALIVE_CMD), dte->header, strlen(dte->header));
 
-	} else if (strcmp(dte->content, SCAN_NETWORK) == 0) {
+	} else if (strcmp(dte->content, SCAN_NETWORK_CMD) == 0) {
 
 		wifi_station_scan(NULL, scan_done);
-		my_espconn_sent_headered(link, SCAN_NETWORK, strlen(SCAN_NETWORK), dte->header, strlen(dte->header));
+		my_espconn_sent_headered(link, SCAN_NETWORK_CMD, strlen(SCAN_NETWORK_CMD), dte->header, strlen(dte->header));
 		netInfo = link;
 
-	} else if (strcmp(dte->content, MAC_INFO) == 0) {
+	} else if (strcmp(dte->content, MAC_INFO_CMD) == 0) {
 		uint8_t temp[100];
 		uint8_t mac[6];
 		wifi_get_macaddr(SOFTAP_IF, mac);
-		os_sprintf(temp, "{macInfo-esp8266(\""MACSTR"\")}", MAC2STR(mac));
+		os_sprintf(temp, "{"MACSTR"}", MAC2STR(mac));
 		my_espconn_sent_headered(link, temp, strlen(temp), dte->header, strlen(dte->header));
 
 	} else {
