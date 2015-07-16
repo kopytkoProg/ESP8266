@@ -166,6 +166,7 @@ user_recvTask(os_event_t *events) {
 
 void ICACHE_FLASH_ATTR ///////
 user_uart_init() {
-	uart_init(BIT_RATE_115200, BIT_RATE_115200);
+	// uart_init(BIT_RATE_115200, BIT_RATE_115200);
+	uart_init(BIT_RATE_38400, BIT_RATE_38400);
 	system_os_task(user_recvTask, user_recvTaskPrio, user_recvTaskQueue, user_recvTaskQueueLen);
 }

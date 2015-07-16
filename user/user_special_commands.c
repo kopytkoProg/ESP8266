@@ -100,7 +100,7 @@ special_cmd(tcp_data_to_exec_t *dte) {
 	} else if (strcmp(dte->content, MAC_INFO_CMD) == 0) {
 		uint8_t temp[100];
 		uint8_t mac[6];
-		wifi_get_macaddr(SOFTAP_IF, mac);
+		wifi_get_macaddr(STATION_IF, mac);
 		os_sprintf(temp, "{"MACSTR"}", MAC2STR(mac));
 		my_espconn_sent_headered(link, temp, strlen(temp), dte->header, strlen(dte->header));
 
