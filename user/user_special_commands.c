@@ -113,6 +113,15 @@ special_cmd(tcp_data_to_exec_t *dte) {
 	return result;
 }
 
+
+
+void ICACHE_FLASH_ATTR
+debug_uart_print_str(uint8_t *d) {
+
+	uart0_sendStr(d);
+
+}
+
 void ICACHE_FLASH_ATTR
 debug_print_str(uint8_t *d) {
 

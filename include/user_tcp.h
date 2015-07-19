@@ -33,7 +33,7 @@ typedef struct {
 
 // #define MAX_NUM_OF_CONNECTIONS 			(10)
 
-#define MAX_RECEIVE  					(100)
+#define MAX_RECEIVE  					(250)
 #define TO_MANY_DATA 					("ERR: TO MANY DATA!")
 #define INVALID_START_OF_TRANSMISION 	("ERR: INVALID START OF TRANSMISION!")
 

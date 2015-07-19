@@ -14,7 +14,7 @@
 os_event_t user_recvTaskQueue[user_recvTaskQueueLen];
 
 // will be code to reasembly msg from uart
-#define BUFFER_SIZE  	100
+#define BUFFER_SIZE  	250
 
 uint8_t buffer[BUFFER_SIZE];
 uint8_t p = 0;
@@ -81,10 +81,33 @@ on_char_come(uint8_t c) {
 		break;
 	case reciving_unknown_length_data:
 		//--------------------------------------------------------
+		// TODO: handle invalid size: ?drop the request or send error
 		if (p >= BUFFER_SIZE) {
 			uart0_sendStr("\r\nERROR: invalid size! \r\n");
 			state = waiting_for_cmd;
 			p = 0;
+
+			//=============== Error info ===============
+			/*
+			 * it can provide errors !!!!!!!!!!!!!!
+			 * because it immediatli send next request to execute
+			 */
+			uint8_t *err = "{ERROR: response for request have invalid size}";
+			uint16_t errLen = strlen(err);
+			uart_data_to_exec_t *dte = (uart_data_to_exec_t *) os_zalloc(sizeof(uart_data_to_exec_t));
+			uint8_t *d = (uint8_t *) os_zalloc(errLen);
+			dte->data = d;
+			dte->len = errLen;
+			// unknown destination
+			dte->id = 0;
+			memcpy(d,err,errLen);
+
+			system_os_post(my_taskPrio, my_uart_unheadered_msg, (uint32_t) dte);
+
+			//============= END Error info =============
+
+
+
 			return;
 		}
 
