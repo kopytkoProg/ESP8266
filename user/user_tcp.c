@@ -352,8 +352,11 @@ disconnect(void *arg) {
  */
 static void ICACHE_FLASH_ATTR
 at_tcpserver_recon_cb(void *arg, sint8 errType) {
-	debug_print_str("at_tcpserver_recon_cb");
-	debug_uart_print_str("at_tcpserver_recon_cb");
+
+	uint8_t b[50];
+	os_sprintf(b, "at_tcpserver_recon_cb: %d", errType);
+	debug_uart_print_str(b);
+	debug_print_str(b);
 
 	disconnect(arg);
 }
@@ -398,7 +401,7 @@ at_tcpserver_listen(void *arg) {
 	pespconn->reverse = &slot[first_free_slot];
 
 	debug_print_str("at_tcpserver_listen \n\r");
-	// espconn_regist_time(pespconn, 0, 10);					// 10s timeout
+	espconn_regist_time(pespconn, 0, 15);					// 15s timeout
 	espconn_regist_recvcb(pespconn, at_tcpclient_recv);
 	espconn_regist_reconcb(pespconn, at_tcpserver_recon_cb);
 	espconn_regist_disconcb(pespconn, at_tcpserver_discon_cb);
