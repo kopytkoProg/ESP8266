@@ -10,6 +10,8 @@
 #include "user_debug.h"
 #include "user_tcp.h"
 #include "user_special_commands.h"
+#include "user_wifi.h"
+#include "utils/str.h"
 
 //----------------------------------------------------------------------------------
 // This part is response for special command {debuging, keep alive} thru TCP
@@ -18,21 +20,21 @@
 at_linkConType *debug = NULL;
 at_linkConType *netInfo = NULL;
 
-uint8_t ICACHE_FLASH_ATTR
-my_start_with(uint8_t *s1, uint8_t *s2) {
-
-	for (; *s1 == *s2; s1++, s2++) {
-		if (*s1 == '\0') {
-			return 0;
-		}
-	}
-
-	if (*s1 == '\0' || *s2 == '\0') {
-		return 0;
-	}
-
-	return 1;
-}
+//uint8_t ICACHE_FLASH_ATTR
+//my_start_with(uint8_t *s1, uint8_t *s2) {
+//
+//	for (; *s1 == *s2; s1++, s2++) {
+//		if (*s1 == '\0') {
+//			return 0;
+//		}
+//	}
+//
+//	if (*s1 == '\0' || *s2 == '\0') {
+//		return 0;
+//	}
+//
+//	return 1;
+//}
 
 uint8_t *authDesc[] = { "OPEN", "WEP", "WPA_PSK", "WPA2_PSK", "WPA_WPA2_PSK" };
 
@@ -58,8 +60,8 @@ scan_done(void *arg, STATUS status) {
 			} else {
 				os_memcpy(ssid, bss_link->ssid, 32);
 			}
-			os_sprintf(temp, "{%s,\"%s\",%d dBm,\""MACSTR"\",%d}", authDesc[bss_link->authmode], ssid, bss_link->rssi,
-					MAC2STR(bss_link->bssid), bss_link->channel);
+			os_sprintf(temp, "{%s,\"%s\",%d dBm,\""MACSTR"\",%d}", authDesc[bss_link->authmode], ssid, bss_link->rssi, MAC2STR(bss_link->bssid),
+					bss_link->channel);
 
 			if (netInfo == NULL || netInfo->free) {
 				netInfo = NULL;
@@ -113,7 +115,22 @@ special_cmd(tcp_data_to_exec_t *dte) {
 	return result;
 }
 
+uint8_t ICACHE_FLASH_ATTR
+special_uart_cmd(uart_data_to_exec_t *dte) {
+	uint8_t result = 1;
 
+	if (my_start_with(CONNECT_TO_WIFI, dte->data) == 0) {
+
+		uart0_sendStr("WIF:cfg received plis wait \r\n");
+		at_setupCmdCwjap(dte->data + sizeof(CONNECT_TO_WIFI) - 1);
+
+	} else {
+		result = 0;
+
+	}
+
+	return result;
+}
 
 void ICACHE_FLASH_ATTR
 debug_uart_print_str(uint8_t *d) {

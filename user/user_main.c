@@ -190,8 +190,11 @@ uart_exec(os_event_t *events) {
 		debug_print_str("\r\n UART unheadered msg: \r\n");
 		debug_print_bfr(dte->data, dte->len);
 
-		// Id from uart data is not used (0)
-		response(dte->data, dte->len);
+		// if it is no uart special command
+		if (!special_uart_cmd(dte)) {
+			// Id from uart data is not used (0)
+			response(dte->data, dte->len);
+		}
 
 		os_free(dte->data);
 		os_free(dte);
@@ -233,7 +236,6 @@ task(os_event_t *events) {
 	}
 }
 
-
 //Init function 
 void ICACHE_FLASH_ATTR
 user_init() {
@@ -256,8 +258,6 @@ user_init() {
 	createServer();
 
 	system_os_task(task, my_taskPrio, my_taskQueue, my_taskkQueueLen);
-
-
 
 //	system_os_task(tcp_exec, tcp_execTaskPrio, tcp_execTaskQueue, tcp_execTaskQueueLen);
 //	system_os_task(uart_exec, uart_execTaskPrio, uart_execTaskQueue, uart_execTaskQueueLen);
