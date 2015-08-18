@@ -355,8 +355,8 @@ at_tcpserver_recon_cb(void *arg, sint8 errType) {
 
 	uint8_t b[50];
 	os_sprintf(b, "at_tcpserver_recon_cb: %d", errType);
-	debug_uart_print_str(b);
-	debug_print_str(b);
+	debug_print_str_uart(b);
+	debug_print_str_tcp(b);
 
 	disconnect(arg);
 }
@@ -368,8 +368,8 @@ at_tcpserver_recon_cb(void *arg, sint8 errType) {
  */
 static void ICACHE_FLASH_ATTR
 at_tcpserver_discon_cb(void *arg) {
-	debug_print_str("at_tcpserver_discon_cb");
-	debug_uart_print_str("at_tcpserver_discon_cb");
+	debug_print_str_tcp("at_tcpserver_discon_cb");
+	debug_print_str_uart("at_tcpserver_discon_cb");
 	disconnect(arg);
 
 }
@@ -400,7 +400,7 @@ at_tcpserver_listen(void *arg) {
 
 	pespconn->reverse = &slot[first_free_slot];
 
-	debug_print_str("at_tcpserver_listen \n\r");
+	debug_print_str_tcp("at_tcpserver_listen \n\r");
 	espconn_regist_time(pespconn, 0, 15);					// 15s timeout
 	espconn_regist_recvcb(pespconn, at_tcpclient_recv);
 	espconn_regist_reconcb(pespconn, at_tcpserver_recon_cb);
@@ -417,10 +417,10 @@ createServer() {
 
 	pTcpServer = (struct espconn *) os_zalloc(sizeof(struct espconn));
 	if (pTcpServer == NULL) {
-		uart0_sendStr("TcpServer Failure\r\n");
+		debug_print_str_uart("TcpServer Failure\r\n");
 		return;
 	}
-	uart0_sendStr("createServer \n\r");
+	debug_print_str_uart("createServer \n\r");
 
 	pTcpServer->type = ESPCONN_TCP;
 	pTcpServer->state = ESPCONN_NONE;

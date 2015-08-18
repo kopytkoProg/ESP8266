@@ -12,29 +12,14 @@
 #include "user_special_commands.h"
 #include "user_wifi.h"
 #include "utils/str.h"
-
+#include "user_debug.h"
 //----------------------------------------------------------------------------------
 // This part is response for special command {debuging, keep alive} thru TCP
 //----------------------------------------------------------------------------------
 
-at_linkConType *debug = NULL;
+
 at_linkConType *netInfo = NULL;
 
-//uint8_t ICACHE_FLASH_ATTR
-//my_start_with(uint8_t *s1, uint8_t *s2) {
-//
-//	for (; *s1 == *s2; s1++, s2++) {
-//		if (*s1 == '\0') {
-//			return 0;
-//		}
-//	}
-//
-//	if (*s1 == '\0' || *s2 == '\0') {
-//		return 0;
-//	}
-//
-//	return 1;
-//}
 
 uint8_t *authDesc[] = { "OPEN", "WEP", "WPA_PSK", "WPA2_PSK", "WPA_WPA2_PSK" };
 
@@ -69,7 +54,7 @@ scan_done(void *arg, STATUS status) {
 			}
 
 			my_espconn_sent_headered(netInfo, temp, strlen(temp), ASYNC_HEADER_WIFI_INFO, strlen(ASYNC_HEADER_WIFI_INFO));
-			debug_print_str(temp);
+			debug_print_str_tcp(temp);
 
 			bss_link = bss_link->next.stqe_next;
 		}
@@ -87,7 +72,7 @@ special_cmd(tcp_data_to_exec_t *dte) {
 
 	if (strcmp(dte->content, DEBUG_CMD) == 0) {
 
-		debug = link;
+		set_debug_msg_target(link);
 
 	} else if (strcmp(dte->content, KEEP_ALIVE_CMD) == 0) {
 
@@ -121,8 +106,8 @@ special_uart_cmd(uart_data_to_exec_t *dte) {
 
 	if (my_start_with(CONNECT_TO_WIFI, dte->data) == 0) {
 
-		uart0_sendStr("WIF:cfg received plis wait \r\n");
-		at_setupCmdCwjap(dte->data + sizeof(CONNECT_TO_WIFI) - 1);
+		debug_print_str_uart("WIF:cfg received plis wait \r\n");
+		join_access_point(dte->data + sizeof(CONNECT_TO_WIFI) - 1);
 
 	} else {
 		result = 0;
@@ -131,37 +116,3 @@ special_uart_cmd(uart_data_to_exec_t *dte) {
 
 	return result;
 }
-
-void ICACHE_FLASH_ATTR
-debug_uart_print_str(uint8_t *d) {
-
-	uart0_sendStr(d);
-
-}
-
-void ICACHE_FLASH_ATTR
-debug_print_str(uint8_t *d) {
-
-	if (debug == NULL || debug->free) {
-		debug = NULL;
-		return;
-	}
-
-	if (strlen(d) < 100)
-		my_espconn_sent(debug, d, strlen(d));
-
-}
-
-void ICACHE_FLASH_ATTR
-debug_print_bfr(uint8_t *d, uint16_t l) {
-
-	if (debug == NULL || debug->free) {
-		debug = NULL;
-		return;
-	}
-
-	if (l < 100)
-		my_espconn_sent(debug, d, l);
-
-}
-

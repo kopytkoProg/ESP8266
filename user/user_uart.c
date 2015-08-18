@@ -10,6 +10,7 @@
 #include "user_config.h"
 #include "user_utils.h"
 #include "user_tcp.h"
+#include "user_debug.h"
 
 os_event_t user_recvTaskQueue[user_recvTaskQueueLen];
 
@@ -64,16 +65,11 @@ on_char_come(uint8_t c) {
 
 			size = atoi((char *) (buffer + 1 + find_first(buffer, p, ',')));
 
-//			// ==================
-//			uint8_t tb[100];
-//			os_sprintf(buffer, "UART: <id: %d, size: %d, coma: %d> \r\n", id, size, find_first(buffer, p, ','));
-//			debug_print_str(buffer);
-//			// ==================
 
 			if (id >= 0 && id < CONNECTION_SLOTS_SIZE && size > 0 && size < BUFFER_SIZE)
 				state = receiving_data;
 			else
-				uart0_sendStr("\r\nERROR: invalid id or size! \r\n");
+				debug_print_str_uart("\r\nERROR: invalid id or size! \r\n");
 
 			p = 0;
 		}
@@ -81,17 +77,13 @@ on_char_come(uint8_t c) {
 		break;
 	case reciving_unknown_length_data:
 		//--------------------------------------------------------
-		// TODO: handle invalid size: ?drop the request or send error
+
 		if (p >= BUFFER_SIZE) {
-			uart0_sendStr("\r\nERROR: invalid size! \r\n");
+			debug_print_str_uart("\r\nERROR: invalid size! \r\n");
 			state = waiting_for_cmd;
 			p = 0;
 
 			//=============== Error info ===============
-			/*
-			 * it can provide errors !!!!!!!!!!!!!!
-			 * because it immediatli send next request to execute
-			 */
 			uint8_t *err = "{ERROR: response for request have invalid size}";
 			uint16_t errLen = strlen(err);
 			uart_data_to_exec_t *dte = (uart_data_to_exec_t *) os_zalloc(sizeof(uart_data_to_exec_t));
@@ -173,9 +165,6 @@ user_recvTask(os_event_t *events) {
 
 		WRITE_PERI_REG(0X60000914, 0x73); //WTD
 		temp = READ_PERI_REG(UART_FIFO(UART0)) & 0xFF;
-//		if ((temp != '\n') && (ECHO)) {
-//			uart_tx_one_char(temp); //display back
-//		}
 		on_char_come(temp);
 	}
 	if (UART_RXFIFO_FULL_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_FULL_INT_ST)) {

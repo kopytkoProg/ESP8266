@@ -56,7 +56,7 @@ exec_data() {
 	if (main_state == Idle && !fifo_is_empty(queue)) {
 		tcp_data_to_exec_t *dte = (tcp_data_to_exec_t *) fifo_first(queue);
 		if (dte == NULL)
-			uart0_sendStr("\r\nERROR:NULL! \r\n");
+			debug_print_str_uart("\r\nERROR:NULL! \r\n");
 
 		// if dte is closing info then let it do
 		if (dte->link->free && dte->len > 0) { 				// closed
@@ -89,7 +89,9 @@ exec_data() {
 
 	}
 }
-
+/**
+ * Uart response for tcp request
+ */
 static void ICACHE_FLASH_ATTR
 response(uint8_t *b, uint16_t size) {
 
@@ -111,8 +113,8 @@ response(uint8_t *b, uint16_t size) {
 		remove_tcp_data_to_exec(dte);
 
 	} else {
-		uart0_sendStr("\r\nERROR: no task in queue! \r\n");
-		debug_print_str("\r\nERROR: no task in queue! \r\n");
+		debug_print_str_uart("\r\nERROR: no task in queue! \r\n");
+		debug_print_str_tcp("\r\nERROR: no task in queue! \r\n");
 	}
 	main_state = Idle;
 }
@@ -130,8 +132,8 @@ tcp_exec(os_event_t *events) {
 	at_linkConType *l = (at_linkConType *) dte->link;
 	struct espconn *e = (struct espconn *) l->pCon;
 
-	debug_print_str("\r\n TCP msg: \r\n");
-	debug_print_bfr(dte->data, dte->len);
+	debug_print_str_tcp("\r\n TCP msg: \r\n");
+	debug_print_bfr_tcp(dte->data, dte->len);
 
 	switch (events->sig) {
 	case my_tcp_msg_comme: {
@@ -150,8 +152,9 @@ tcp_exec(os_event_t *events) {
 	case my_tcp_disconnect:
 
 		if (fifo_push(queue, dte) == -1) {
-			uart0_sendStr("\r\nERROR: queue is full ! \r\n");
-			debug_print_str("\r\nERROR: queue is full ! \r\n");
+			debug_print_str_uart("\r\nERROR: queue is full ! \r\n");
+			debug_print_str_tcp("\r\nERROR: queue is full ! \r\n");
+			remove_tcp_data_to_exec(dte);
 		} else
 			exec_data();
 
@@ -176,8 +179,8 @@ uart_exec(os_event_t *events) {
 	switch (events->sig) {
 	case my_uart_headered_msg:
 
-		debug_print_str("\r\n UART headered msg: \r\n");
-		debug_print_bfr(dte->data, dte->len);
+		debug_print_str_tcp("\r\n UART headered msg: \r\n");
+		debug_print_bfr_tcp(dte->data, dte->len);
 
 		my_espconn_sent(get_link_by_linkId(dte->id), dte->data, dte->len);
 
@@ -187,8 +190,8 @@ uart_exec(os_event_t *events) {
 		break;
 	case my_uart_unheadered_msg:
 
-		debug_print_str("\r\n UART unheadered msg: \r\n");
-		debug_print_bfr(dte->data, dte->len);
+		debug_print_str_tcp("\r\n UART unheadered msg: \r\n");
+		debug_print_bfr_tcp(dte->data, dte->len);
 
 		// if it is no uart special command
 		if (!special_uart_cmd(dte)) {
@@ -247,20 +250,16 @@ user_init() {
 	fifo_init(queue, QUEUE_SIZE);
 
 	//Set ap settings
-	uart0_sendStr("\r\n");
-	uart0_sendStr("Hello \r\n");
+	debug_print_str_uart("\r\n");
+	debug_print_str_uart("Hello \r\n");
 
-	uart0_sendStr("\r\n");
+	debug_print_str_uart("\r\n");
 
 	setup_wifi();
 
-	uart0_sendStr("CreatingServer...\r\n");
+	debug_print_str_uart("CreatingServer...\r\n");
 	createServer();
 
 	system_os_task(task, my_taskPrio, my_taskQueue, my_taskkQueueLen);
-
-//	system_os_task(tcp_exec, tcp_execTaskPrio, tcp_execTaskQueue, tcp_execTaskQueueLen);
-//	system_os_task(uart_exec, uart_execTaskPrio, uart_execTaskQueue, uart_execTaskQueueLen);
-	//system_os_task(tcp_dc, tcp_dcTaskPrio, tcp_dcTaskQueue, tcp_dcTaskQueueLen);
 
 }

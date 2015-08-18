@@ -7,37 +7,12 @@
 #include "user_interface.h"
 #include "driver/uart.h"
 #include "utils/str.h"
-
+#include "user_debug.h"
 os_timer_t at_japDelayChack;
 
-//int8_t ICACHE_FLASH_ATTR
-//at_dataStrCpy(void *pDest, const void *pSrc, int8_t maxLen) {
-////  assert(pDest!=NULL && pSrc!=NULL);
-//
-//	char *pTempD = pDest;
-//	const char *pTempS = pSrc;
-//	int8_t len;
-//
-//	if (*pTempS != '\"') {
-//		return -1;
-//	}
-//	pTempS++;
-//	for (len = 0; len < maxLen; len++) {
-//		if (*pTempS == '\"') {
-//			*pTempD = '\0';
-//			break;
-//		} else {
-//			*pTempD++ = *pTempS++;
-//		}
-//	}
-//	if (len == maxLen) {
-//		return -1;
-//	}
-//	return len;
-//}
 
 void ICACHE_FLASH_ATTR
-at_japChack(void *arg) {
+check_wifi_station_status(void *arg) {
 	static uint8_t chackTime = 0;
 	uint8_t japState;
 	char temp[32];
@@ -47,12 +22,12 @@ at_japChack(void *arg) {
 	japState = wifi_station_get_connect_status();
 	if (japState == STATION_GOT_IP) {
 		chackTime = 0;
-		uart0_sendStr("wifi: SUCCES \r\n");
+		debug_print_str_uart("wifi: SUCCES \r\n");
 		return;
 	} else if (chackTime >= 7) {
 		wifi_station_disconnect();
 		chackTime = 0;
-		uart0_sendStr("wifi: FAIL \r\n");
+		debug_print_str_uart("wifi: FAIL \r\n");
 		return;
 	}
 	os_timer_arm(&at_japDelayChack, 2000, 0);
@@ -65,7 +40,7 @@ at_japChack(void *arg) {
  * @retval None
  */
 void ICACHE_FLASH_ATTR
-at_setupCmdCwjap(char *pPara) {
+join_access_point(char *pPara) {
 	//at_setupCmdCwjap(0, "\"n8F86\",\"12345678\"");
 	char temp[64];
 	struct station_config stationConf;
@@ -89,11 +64,11 @@ at_setupCmdCwjap(char *pPara) {
 		wifi_station_connect();
 
 		os_timer_disarm(&at_japDelayChack);
-		os_timer_setfn(&at_japDelayChack, (os_timer_func_t *) at_japChack, NULL);
+		os_timer_setfn(&at_japDelayChack, (os_timer_func_t *) check_wifi_station_status, NULL);
 		os_timer_arm(&at_japDelayChack, 3000, 0);
 
 	} else {
-		uart0_sendStr("wifi: INVALID CFG \r\n");
+		debug_print_str_uart("wifi: INVALID CFG \r\n");
 	}
 }
 
@@ -119,9 +94,9 @@ setup_wifi() {
 	os_memcpy(ssid, &stationConf.ssid, 32);
 	os_memcpy(password, &stationConf.password, 64);
 
-	uart0_sendStr("Connecting to wifi: ");
-	uart0_sendStr(ssid);
-	uart0_sendStr("\r\n");
+	debug_print_str_uart("Connecting to wifi: ");
+	debug_print_str_uart(ssid);
+	debug_print_str_uart("\r\n");
 
 	// Set static IP
 	wifi_station_dhcpc_stop();
@@ -133,7 +108,7 @@ setup_wifi() {
 	pTempIp.gw.addr = ipaddr_addr(GW);
 
 	if (!wifi_set_ip_info(0x00, &pTempIp)) {
-		uart0_sendStr("\r\nWIFI-ERROR-2\r\n");
+		debug_print_str_uart("\r\nWIFI-ERROR-2\r\n");
 		wifi_station_dhcpc_start();
 	}
 
@@ -141,13 +116,13 @@ setup_wifi() {
 
 	uint8_t t[100];
 	os_sprintf(t, "%d.%d.%d.%d\r\n", IP2STR(&pTempIp.ip));
-	uart0_sendStr(t);
+	debug_print_str_uart(t);
 
 	uint8 bssid[6];
 	wifi_get_macaddr(STATION_IF, bssid);
 	os_sprintf(t, "\""MACSTR"\"\r\n", MAC2STR(bssid));
 
-	uart0_sendStr(t);
+	debug_print_str_uart(t);
 
 
 
